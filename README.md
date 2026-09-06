@@ -8,6 +8,23 @@ Push-to-talk dictation, on-device. Speak, and corrected text lands wherever
 your cursor is — no cloud account, no telemetry, nothing you say leaves the
 machine.
 
+## Download
+
+Grab an installer from the
+[latest release](https://github.com/lam3y35/whispr-ai/releases/latest) —
+no build needed:
+
+| File | For |
+|---|---|
+| `WhisprAI.exe` | Windows 10/11 — run it, hold **Right Ctrl**, talk |
+| `app-release.apk` | Android 7+ — sideload, then enable the Whispr AI keyboard |
+
+Every tag (`v*`) is built by `.github/workflows/release.yml` behind the same
+test gates as CI, and the binaries land on a permanent public Release.
+Regular CI runs on every push also upload the same artifacts (90-day retention,
+login required). The first dictation on Windows needs the ~660 MB Parakeet
+model — see [docs/USAGE.md](docs/USAGE.md) for the one-time setup.
+
 | Platform | What it is | Status |
 |---|---|---|
 | **Android** (`lib/`, `android/`) | A dictation **keyboard** (IME) + companion app: history, dictionary editor, in-app dictation. Works in any app's text field. | 24/24 tests pass, including all 19 shared dictionary contract vectors |
