@@ -173,6 +173,10 @@ public sealed class DictationEngine : IAsyncDisposable
             _buffer = [];
             _startedAt = _clock.Now;
             _recording = new CancellationTokenSource();
+            // A successful start retires whatever came before: LastFault is "the fault
+            // currently being reported", not a lifetime history. Matches the UI, which
+            // clears the fault banner the moment recording starts again.
+            LastFault = null;
             SetState(DictationState.Recording);
             AppLog.Info("recording started");
         }
@@ -251,6 +255,21 @@ public sealed class DictationEngine : IAsyncDisposable
             return;
         }
 
+        if (IsDigitalSilence(samples))
+        {
+            // WASAPI does not fail when Windows blocks an app from the microphone — it
+            // streams exact zeros, so every layer above looked healthy and the user got
+            // nothing: no text, no fault, no hint. This is the failure a real user hit
+            // first (seven recordings, zero diagnostics). Surface it loudly.
+            LastFault =
+                "The microphone delivered silence. Allow microphone access for desktop apps "
+                + "(Settings > Privacy & security > Microphone), and check the mic is not muted "
+                + "or set to a different default device.";
+            AppLog.Error("recording captured only digital silence — microphone blocked, muted, or the wrong default device");
+            Faulted?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         // Measured from key release, because that is the wait the user actually feels — and
         // it is the only figure on which a streaming and a batch engine compare honestly.
         var releasedAt = _clock.Now;
@@ -272,7 +291,13 @@ public sealed class DictationEngine : IAsyncDisposable
         }
 
         var raw = string.Join(' ', transcripts);
-        if (string.IsNullOrWhiteSpace(raw)) return;
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            // Normal when nothing intelligible was said — but it must be visible, or a
+            // misconfigured device looks identical to a working one.
+            AppLog.Info("recording produced no recognised speech");
+            return;
+        }
 
         // The dictionary runs last and unconditionally. Biasing only raises the odds of the
         // right word; this is the pass that guarantees it.
@@ -304,6 +329,24 @@ public sealed class DictationEngine : IAsyncDisposable
             AppLog.Error($"injection failed: {ex}");
             Faulted?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    /// <summary>
+    /// True when a recording is entirely exact zeros — digital silence, not quiet audio.
+    /// </summary>
+    /// <remarks>
+    /// Real rooms have a noise floor: even a muted-but-enabled device usually returns
+    /// dither. A buffer of precisely zero samples means the OS or driver handed the app a
+    /// dead pipe, which is exactly what WASAPI reports as success. A few zero samples in
+    /// a real recording are ordinary; only an all-zero buffer counts.
+    /// </remarks>
+    private static bool IsDigitalSilence(List<float> samples)
+    {
+        foreach (var sample in samples)
+        {
+            if (sample != 0f) return false;
+        }
+        return true;
     }
 
     private void SetState(DictationState state)

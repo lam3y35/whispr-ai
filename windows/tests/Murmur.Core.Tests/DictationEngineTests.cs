@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Murmur.Abstractions;
 using Murmur.Core;
 using Murmur.Dictionary;
@@ -141,6 +142,210 @@ public sealed class DictationEngineTests
         result.IsSuccessful.ShouldBeTrue(
             "Murmur.Core must stay platform-neutral: " +
             string.Join(", ", result.FailingTypeNames ?? []));
+    }
+}
+
+/// <summary>
+/// The fault path: a capture that will not open must surface as a fault, not vanish.
+/// </summary>
+/// <remarks>
+/// The original fire-and-forget bug shipped because nothing exercised a failing capture —
+/// every test used a healthy one. These tests hold the replacement behaviour in place:
+/// Faulted fires, the engine lands back in Idle, the fault text is set, and the engine
+/// still works for the next press.
+/// </remarks>
+/// <summary>
+/// Serial execution for tests that redirect AppLog: the redirect is process-global, so
+/// two parallel tests would each point the log at their own file and interleave writes
+/// into each other's assertion target.
+/// </summary>
+[CollectionDefinition(nameof(UsesTheRealAppLog), DisableParallelization = true)]
+public sealed class UsesTheRealAppLog;
+
+/// <summary>
+/// Redirects AppLog to a temp file per test so runs never pollute the user's real app.log.
+/// </summary>
+[Collection(nameof(UsesTheRealAppLog))]
+public abstract class LogIsolatedTest : IDisposable
+{
+    private readonly string _logPath = System.IO.Path.Combine(
+        System.IO.Path.GetTempPath(),
+        $"whispr-test-{Guid.NewGuid():N}.log");
+
+    /// <summary>Initializes log isolation for the derived test class.</summary>
+    protected LogIsolatedTest() => AppLog.UseLocationForTests(_logPath);
+
+    /// <summary>The redirected log file for assertions.</summary>
+    protected string LogPath => _logPath;
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        AppLog.UseLocationForTests(null);
+        try { File.Delete(_logPath); } catch { /* best effort */ }
+        GC.SuppressFinalize(this);
+    }
+}
+
+public sealed class FaultPathTests : LogIsolatedTest
+{
+    /// <summary>Faults on the first N capture attempts, then behaves like a steady tone.</summary>
+    private sealed class FlakyAudioCapture : IAudioCapture
+    {
+        private int _faultsRemaining = 1;
+
+        /// <summary>How many capture attempts still start by throwing.</summary>
+        public int FaultsRemaining { get => _faultsRemaining; set => _faultsRemaining = value; }
+
+        public bool IsCapturing { get; private set; }
+
+        public async IAsyncEnumerable<AudioChunk> CaptureAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            IsCapturing = true;
+            try
+            {
+                if (_faultsRemaining > 0)
+                {
+                    _faultsRemaining--;
+                    await Task.Yield();
+                    throw new InvalidOperationException("the microphone could not be opened");
+                }
+
+                // Healthy mode: half a second of a loud constant, so Level reads non-zero
+                // and the normal dictate-wait loops make progress.
+                var chunk = new float[AudioChunk.SampleRate / 20];
+                Array.Fill(chunk, 0.5f);
+                for (var i = 0; i < 10; i++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    yield return new AudioChunk(chunk);
+                    await Task.Yield();
+                }
+            }
+            finally
+            {
+                IsCapturing = false;
+            }
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    private static DictationEngine Build(IAudioCapture capture)
+    {
+        var injector = new RecordingTextInjector();
+        return new DictationEngine(
+            capture, new FakeHotkeySource(), new FakeTranscriber("recovered"), injector,
+            () => Array.Empty<DictionaryEntry>(), new FakeClock());
+    }
+
+    [Fact]
+    public async Task A_faulting_capture_fires_Faulted_and_resets_to_idle()
+    {
+        var hotkey = new FakeHotkeySource();
+        var injector = new RecordingTextInjector();
+        await using var engine = new DictationEngine(
+            new FlakyAudioCapture(), hotkey, new FakeTranscriber("never"), injector,
+            () => Array.Empty<DictionaryEntry>(), new FakeClock());
+
+        var faulted = new TaskCompletionSource();
+        engine.Faulted += (_, _) => faulted.TrySetResult();
+
+        hotkey.Press();
+        await faulted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        engine.State.ShouldBe(DictationState.Idle);
+        engine.LastFault.ShouldNotBeNull();
+        engine.LastFault.ShouldContain("microphone");
+        injector.Injected.ShouldBeEmpty();
+
+        // The fault must be in the log file, not just in memory — the log is what a
+        // user can send you when the UI is not enough. Polled: the write is sequential
+        // with the event, but the read races a concurrent appender on Windows share modes.
+        ShouldContainInLogEventually("dictation fault in BeginAsync");
+    }
+
+    private void ShouldContainInLogEventually(string marker)
+    {
+        for (var i = 0; ; i++)
+        {
+            string text;
+            try { text = File.ReadAllText(LogPath); }
+            catch (IOException) when (i < 50)
+            {
+                // A concurrent append holds the file; retry briefly.
+                Thread.Sleep(20);
+                continue;
+            }
+
+            if (text.Contains(marker)) return;
+            if (i >= 50)
+            {
+                throw new InvalidOperationException(
+                    $"Log never contained '{marker}'. Log was:{Environment.NewLine}{text}");
+            }
+            Thread.Sleep(20);
+        }
+    }
+
+    [Fact]
+    public async Task The_engine_recovers_and_dictates_after_a_fault()
+    {
+        var hotkey = new FakeHotkeySource();
+        var injector = new RecordingTextInjector();
+        var capture = new FlakyAudioCapture();
+        await using var engine = new DictationEngine(
+            capture, hotkey, new FakeTranscriber("recovered"), injector,
+            () => Array.Empty<DictionaryEntry>(), new FakeClock());
+
+        var faulted = new TaskCompletionSource();
+        engine.Faulted += (_, _) => faulted.TrySetResult();
+
+        hotkey.Press();
+        await faulted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        engine.State.ShouldBe(DictationState.Idle);
+
+        hotkey.Release();
+        for (var i = 0; i < 2000 && engine.State != DictationState.Idle; i++) await Task.Yield();
+
+        // The very next press must behave like nothing ever failed.
+        hotkey.Press();
+        for (var i = 0; i < 2000 && engine.State != DictationState.Recording; i++) await Task.Yield();
+        for (var i = 0; i < 20000 && engine.Level == 0; i++) await Task.Yield();
+        hotkey.Release();
+        for (var i = 0; i < 20000 && engine.State != DictationState.Idle; i++) await Task.Yield();
+
+        injector.Injected.ShouldHaveSingleItem();
+        injector.Injected[0].ShouldBe("recovered");
+        engine.LastFault.ShouldBeNull();
+    }
+
+    [Fact]
+    public async Task A_silent_microphone_surfaces_a_fault_instead_of_vanishing()
+    {
+        // The exact failure a real user hit: WASAPI happily delivers exact zeros when
+        // Windows blocks the mic, every layer above looked healthy, and the session
+        // vanished with no text, no fault and no log line.
+        var hotkey = new FakeHotkeySource();
+        var injector = new RecordingTextInjector();
+        await using var engine = new DictationEngine(
+            FakeAudioCapture.Silence(0.5), hotkey, new FakeTranscriber("never"), injector,
+            () => Array.Empty<DictionaryEntry>(), new FakeClock());
+
+        var faulted = new TaskCompletionSource();
+        engine.Faulted += (_, _) => faulted.TrySetResult();
+
+        hotkey.Press();
+        for (var i = 0; i < 2000 && engine.State != DictationState.Recording; i++) await Task.Yield();
+        hotkey.Release();
+        await faulted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        engine.State.ShouldBe(DictationState.Idle);
+        engine.LastFault.ShouldNotBeNull();
+        engine.LastFault.ShouldContain("silence");
+        injector.Injected.ShouldBeEmpty();
+        ShouldContainInLogEventually("digital silence");
     }
 }
 

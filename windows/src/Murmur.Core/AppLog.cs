@@ -15,12 +15,26 @@ public static class AppLog
 {
     private static readonly object Gate = new();
 
-    private static readonly string FilePath = System.IO.Path.Combine(
+    private static readonly string DefaultFilePath = System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "WhisprAI", "app.log");
 
+    private static string _filePath = DefaultFilePath;
+
     /// <summary>Where the log lives, so the UI can point the user at it.</summary>
-    public static string Location => FilePath;
+    public static string Location => _filePath;
+
+    /// <summary>
+    /// Redirects the log for the duration of a test; <c>null</c> restores the default.
+    /// </summary>
+    /// <remarks>
+    /// Without this, every engine test appends to the user's real app.log — the log is
+    /// a diagnostic record of real dictations, and test noise in it is worse than none.
+    /// </remarks>
+    public static void UseLocationForTests(string? path)
+    {
+        lock (Gate) { _filePath = path ?? DefaultFilePath; }
+    }
 
     /// <summary>Appends an informational line.</summary>
     public static void Info(string message) => Write("INFO ", message);
@@ -34,9 +48,9 @@ public static class AppLog
         {
             lock (Gate)
             {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(FilePath)!);
+                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_filePath)!);
                 File.AppendAllText(
-                    FilePath,
+                    _filePath,
                     $"{DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss.fff} {level} {message}{Environment.NewLine}",
                     Encoding.UTF8);
             }

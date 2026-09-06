@@ -61,7 +61,10 @@ jobs:
         with:
           files: build/app/outputs/flutter-apk/app-release.apk
           fail_on_unmatched_files: true
-          # GitHub-generated notes: commit lines since the previous tag.
+          # Generated notes (commit lines since the previous tag) are created
+          # in EXACTLY ONE place. Both jobs upload to the same release; the
+          # action APPENDS its generated notes to any existing body, so two
+          # jobs with this flag produced the changelog line twice on v0.1.1.
           generate_release_notes: true
 
   windows:
@@ -128,5 +131,7 @@ jobs:
         with:
           files: windows/artifacts/publish/WhisprAI.exe
           fail_on_unmatched_files: true
-          # GitHub-generated notes: commit lines since the previous tag.
-          generate_release_notes: true
+          # No generate_release_notes here: the APK job owns notes (see the
+          # comment there). If this job creates the release first, the APK
+          # job appends the notes; appending twice is what duplicated the
+          # changelog on v0.1.1.
