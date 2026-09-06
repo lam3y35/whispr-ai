@@ -1,5 +1,9 @@
 # Whispr AI
 
+[![Android](https://github.com/lam3y35/whispr-ai/actions/workflows/android.yml/badge.svg)](https://github.com/lam3y35/whispr-ai/actions/workflows/android.yml)
+[![Windows](https://github.com/lam3y35/whispr-ai/actions/workflows/windows.yml/badge.svg)](https://github.com/lam3y35/whispr-ai/actions/workflows/windows.yml)
+[![Release](https://github.com/lam3y35/whispr-ai/actions/workflows/release.yml/badge.svg)](https://github.com/lam3y35/whispr-ai/actions/workflows/release.yml)
+
 Push-to-talk dictation, on-device. Speak, and corrected text lands wherever
 your cursor is — no cloud account, no telemetry, nothing you say leaves the
 machine.
