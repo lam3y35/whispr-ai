@@ -3,9 +3,7 @@ name: Android
 on:
   push:
     branches: [main]
-    paths: ['lib/**', 'android/**', 'test/**', 'pubspec.yaml', '.github/workflows/android.yml']
   pull_request:
-    paths: ['lib/**', 'android/**', 'test/**', 'pubspec.yaml', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:
