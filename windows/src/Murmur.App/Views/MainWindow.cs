@@ -38,6 +38,7 @@ public sealed class MainWindow : Window
 
     private Control? _transcriptionsView;
     private Control? _dictionaryView;
+    private BrushedPanel? _faultBanner;
     private DateTimeOffset? _startedAt;
 
     /// <summary>Builds a window with no engine behind it. Used by headless tests.</summary>
@@ -89,7 +90,19 @@ public sealed class MainWindow : Window
         Content = BuildLayout();
         ShowSection(transcriptions: true);
 
-        if (_composition?.Engine is not null) _composition.Engine.Start();
+        if (_composition?.Engine is not null)
+        {
+            if (!_composition.Engine.Start())
+            {
+                ShowFault("The push-to-talk hook could not be installed. Another app may own the key — try a different key in Settings.");
+            }
+            _composition.Engine.Faulted += (_, _) =>
+            {
+                var fault = _composition.Engine.LastFault;
+                if (fault is not null)
+                    Dispatcher.UIThread.Post(() => ShowFault(fault + $"\n(Details: {AppLog.Location})"));
+            };
+        }
     }
 
     private DockPanel BuildLayout()
@@ -253,6 +266,58 @@ public sealed class MainWindow : Window
         _ = new SettingsWindow(_composition.Settings).ShowDialog(this);
     }
 
+    /// <summary>
+    /// A red strip across the top of the panel naming the last failure.
+    /// </summary>
+    /// <remarks>
+    /// Recording faults used to disappear into unobserved task exceptions: the button
+    /// did nothing and the log — which did not exist — was the only witness. A fault
+    /// that reaches the front panel can be acted on; one that does not cannot.
+    /// </remarks>
+    private void ShowFault(string message)
+    {
+        _faultBanner = new BrushedPanel
+        {
+            Margin = new Thickness(0, 0, 0, Tokens.Space.Base),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = Tokens.Space.Base,
+                Margin = new Thickness(Tokens.Space.Base),
+                Children =
+                {
+                    new Lamp
+                    {
+                        IsLit = true,
+                        LampColor = Tokens.Colors.Record,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                    new TextBlock
+                    {
+                        Text = message,
+                        FontFamily = Tokens.Fonts.Grotesque,
+                        FontSize = Tokens.Fonts.Label,
+                        Foreground = Tokens.Brushes.Ink,
+                        TextWrapping = TextWrapping.Wrap,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    },
+                },
+            },
+        };
+
+        if (Content is DockPanel root)
+        {
+            root.Children.Insert(0, Panels.Docked(_faultBanner, Dock.Top));
+        }
+    }
+
+    private void HideFault()
+    {
+        if (_faultBanner is null) return;
+        if (Content is DockPanel root) root.Children.Remove(_faultBanner);
+        _faultBanner = null;
+    }
+
     /// <summary>Pulls state from the engine onto the panel.</summary>
     private void SyncFromEngine()
     {
@@ -271,7 +336,11 @@ public sealed class MainWindow : Window
         _recordKey.IsEngaged = recording;
         _recordKey.Content = recording ? "STOP" : "RECORD";
 
-        if (recording && _startedAt is null) _startedAt = DateTimeOffset.Now;
+        if (recording && _startedAt is null)
+        {
+            _startedAt = DateTimeOffset.Now;
+            HideFault(); // a recording that actually started clears the last failure
+        }
         else if (!recording) _startedAt = null;
 
         UpdateCounter();

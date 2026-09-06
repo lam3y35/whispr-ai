@@ -54,17 +54,41 @@
   <Target Name="PublishWindowsPlatformLayer"
           BeforeTargets="ComputeResolvedFilesToPublishList"
           Condition="'$([System.OperatingSystem]::IsWindows())' == 'true'">
-    <MSBuild Projects="..\Murmur.Platform.Windows\Murmur.Platform.Windows.csproj"
-             Targets="Build"
-             Properties="Configuration=$(Configuration)" />
+    <!-- The platform layer ships loose beside the exe: PublishSingleFile only bundles
+         assemblies the compiler knows about, and this one is deliberately invisible to
+         it (PlatformFactory resolves it by reflection at startup). Program.cs installs
+         a resolver as a belt-and-braces fallback.
+
+         Its dependency closure is produced by PUBLISHING the platform project itself,
+         with the same RID as the app. The previous approach globbed the child's bin
+         folder, and that was a latent defect: an inherited or mismatched
+         RuntimeIdentifier changed the output layout, the glob matched nothing, and the
+         exe shipped with no audio stack — while every test and the self-test stayed
+         green, because none of them open the microphone. Publishing the project
+         yields the real closure (platform dll + Abstractions + every NAudio dll), and
+         the guards below refuse to ship without them. -->
+    <PropertyGroup>
+      <!-- No trailing separator: in an Exec command, a quoted path ending in '\'
+           escapes the closing quote ("...platform\") and the rest of the command
+           line gets swallowed into the argument. -->
+      <PlatformPublishDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\artifacts\platform'))</PlatformPublishDir>
+    </PropertyGroup>
+    <!-- A separate dotnet process, not the MSBuild task: global properties of the app
+         publish (PublishSingleFile, RuntimeIdentifier, SelfContained) flow into in-proc
+         child builds and poison them in ways that surface only at first recording. A
+         fresh process starts from a clean property sheet; the RID is pinned explicitly. -->
+    <Exec Command="dotnet publish &quot;..\Murmur.Platform.Windows\Murmur.Platform.Windows.csproj&quot; -c $(Configuration) -r win-x64 --no-self-contained -o &quot;$(PlatformPublishDir)&quot; --nologo -v m" />
     <ItemGroup>
-      <_PlatformPublish Include="..\Murmur.Platform.Windows\bin\$(Configuration)\net10.0-windows\Murmur.Platform.Windows.dll" />
-      <_PlatformPublish Include="..\Murmur.Platform.Windows\bin\$(Configuration)\net10.0-windows\NAudio*.dll" />
-      <!-- Loose beside the exe rather than inside the bundle: PublishSingleFile only bundles
-           assemblies the compiler knows about, and this one is deliberately invisible to it.
-           The default load context probes AppContext.BaseDirectory, and Program.cs installs
-           a resolver as a belt-and-braces fallback. -->
-      <ResolvedFileToPublish Include="@(_PlatformPublish)">
+      <_PlatformFiles Include="$(PlatformPublishDir)\Murmur.Platform.Windows.dll" />
+      <_PlatformFiles Include="$(PlatformPublishDir)\Murmur.Abstractions.dll" />
+      <_PlatformFiles Include="$(PlatformPublishDir)\NAudio*.dll" />
+    </ItemGroup>
+    <Error Condition="!Exists('$(PlatformPublishDir)\Murmur.Platform.Windows.dll')"
+           Text="The platform layer publish produced no Murmur.Platform.Windows.dll — publish cannot continue." />
+    <Error Condition="!Exists('$(PlatformPublishDir)\NAudio.Wasapi.dll')"
+           Text="The platform layer publish produced no NAudio.Wasapi.dll — the exe would fail at first recording. Do not ship this." />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="@(_PlatformFiles)">
         <RelativePath>%(Filename)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>

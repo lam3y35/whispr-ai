@@ -66,6 +66,12 @@ public sealed class DictationEngine : IAsyncDisposable
     /// <summary>Raised whenever <see cref="State"/> or <see cref="Level"/> changes.</summary>
     public event EventHandler? Changed;
 
+    /// <summary>Raised when an async stage failed; the message is in <see cref="LastFault"/>.</summary>
+    public event EventHandler? Faulted;
+
+    /// <summary>The most recent failure message, or null. Also written to app.log.</summary>
+    public string? LastFault { get; private set; }
+
     /// <summary>Wires the engine to its platform implementations.</summary>
     /// <param name="capture">Microphone source.</param>
     /// <param name="hotkey">Push-to-talk source.</param>
@@ -97,7 +103,12 @@ public sealed class DictationEngine : IAsyncDisposable
 
     /// <summary>Arms the hotkey.</summary>
     /// <returns>False if the hook could not be installed.</returns>
-    public bool Start() => _hotkey.Start();
+    public bool Start()
+    {
+        var ok = _hotkey.Start();
+        AppLog.Info(ok ? "hotkey armed" : "hotkey hook FAILED to install");
+        return ok;
+    }
 
     /// <summary>
     /// Starts or stops recording from a button rather than the hotkey.
@@ -108,13 +119,49 @@ public sealed class DictationEngine : IAsyncDisposable
     /// </remarks>
     public void TogglePushToTalk()
     {
-        if (State == DictationState.Idle) _ = BeginAsync();
-        else if (State == DictationState.Recording) _ = EndAsync();
+        if (State == DictationState.Idle) RunSafe(BeginAsync);
+        else if (State == DictationState.Recording) RunSafe(EndAsync);
     }
 
-    private void OnPressed(object? sender, EventArgs e) => _ = BeginAsync();
+    private void OnPressed(object? sender, EventArgs e) => RunSafe(BeginAsync);
 
-    private void OnReleased(object? sender, EventArgs e) => _ = EndAsync();
+    private void OnReleased(object? sender, EventArgs e) => RunSafe(EndAsync);
+
+    /// <summary>
+    /// Fire-and-forget with a witness.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// These transitions used to be bare <c>_ =</c> calls, and a failure anywhere inside —
+    /// a mic that will not open, an injector that throws — vanished into an unobserved
+    /// task exception: the UI sat in Idle forever with no hint why. The first real-user
+    /// mic failure proved the point. Faults are now logged and surfaced via
+    /// <see cref="Faulted"/>.
+    /// </para>
+    /// <para>
+    /// The transition is still invoked directly — NOT wrapped in Task.Run. Invoking it
+    /// runs the state machine synchronously up to its first real await, which preserves
+    /// the ordering guarantee press-before-release relies on; a queue hop here let
+    /// EndAsync overtake BeginAsync and stuck the machine in Recording.
+    /// </para>
+    /// </remarks>
+    private void RunSafe(Func<Task> transition)
+    {
+        _ = transition().ContinueWith(
+            t =>
+            {
+                var ex = t.Exception?.GetBaseException() ?? t.Exception;
+                if (ex is null) return;
+
+                LastFault = ex.Message;
+                AppLog.Error($"dictation fault in {transition.Method.Name}: {ex}");
+                SetState(DictationState.Idle);
+                Faulted?.Invoke(this, EventArgs.Empty);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+    }
 
     private async Task BeginAsync()
     {
@@ -127,6 +174,7 @@ public sealed class DictationEngine : IAsyncDisposable
             _startedAt = _clock.Now;
             _recording = new CancellationTokenSource();
             SetState(DictationState.Recording);
+            AppLog.Info("recording started");
         }
         finally
         {
@@ -197,7 +245,11 @@ public sealed class DictationEngine : IAsyncDisposable
 
     private async Task ProcessAsync(List<float>? samples)
     {
-        if (samples is null || samples.Count == 0) return;
+        if (samples is null || samples.Count == 0)
+        {
+            AppLog.Info("recording produced no audio");
+            return;
+        }
 
         // Measured from key release, because that is the wait the user actually feels — and
         // it is the only figure on which a streaming and a batch engine compare honestly.
@@ -234,7 +286,24 @@ public sealed class DictationEngine : IAsyncDisposable
             Corrections: applied);
 
         Completed?.Invoke(this, result);
-        await _injector.InjectAsync(corrected, CancellationToken.None).ConfigureAwait(false);
+        AppLog.Info(
+            $"dictated {result.AudioDuration.TotalSeconds:F1}s -> '{corrected}' "
+            + $"({applied.Count} corrections, {result.ProcessingTime.TotalMilliseconds:F0} ms)");
+
+        try
+        {
+            var injected = await _injector
+                .InjectAsync(corrected, CancellationToken.None)
+                .ConfigureAwait(false);
+            AppLog.Info(injected ? "injected into the focused app" : "injection returned false");
+        }
+        catch (Exception ex)
+        {
+            // The text is already in history; failing to inject is surfaced, not fatal.
+            LastFault = ex.Message;
+            AppLog.Error($"injection failed: {ex}");
+            Faulted?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     private void SetState(DictationState state)
