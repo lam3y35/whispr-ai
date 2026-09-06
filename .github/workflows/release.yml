@@ -17,6 +17,11 @@ on:
 permissions:
   contents: write
 
+env:
+  # Secrets are not readable in `if:`; mirror them through env so the signing
+  # step self-disables until real credentials are configured.
+  AZURE_SIGNING_TENANT_ID: ${{ secrets.AZURE_SIGNING_TENANT_ID }}
+
 jobs:
   android:
     name: Release APK
@@ -56,6 +61,8 @@ jobs:
         with:
           files: build/app/outputs/flutter-apk/app-release.apk
           fail_on_unmatched_files: true
+          # GitHub-generated notes: commit lines since the previous tag.
+          generate_release_notes: true
 
   windows:
     name: Release exe
@@ -103,8 +110,23 @@ jobs:
           $run = Start-Process -FilePath $exe -ArgumentList '--selftest' -Wait -PassThru -NoNewWindow
           if ($run.ExitCode -ne 0) { throw "self-test failed with exit code $($run.ExitCode)" }
 
+      - name: Sign the exe (no-op until signing secrets are configured)
+        if: env.AZURE_SIGNING_TENANT_ID != ''
+        uses: azure/trusted-signing-action@v0.5.1
+        with:
+          azure-tenant-id: ${{ secrets.AZURE_SIGNING_TENANT_ID }}
+          azure-client-id: ${{ secrets.AZURE_SIGNING_CLIENT_ID }}
+          azure-client-secret: ${{ secrets.AZURE_SIGNING_CLIENT_SECRET }}
+          endpoint: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          code-signing-account-name: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ secrets.AZURE_SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\windows\artifacts\publish
+          files-folder-filter: exe
+
       - name: Upload exe to the release
         uses: softprops/action-gh-release@v2
         with:
           files: windows/artifacts/publish/WhisprAI.exe
           fail_on_unmatched_files: true
+          # GitHub-generated notes: commit lines since the previous tag.
+          generate_release_notes: true
