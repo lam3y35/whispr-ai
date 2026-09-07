@@ -273,7 +273,11 @@ public sealed class DictationEngine : IAsyncDisposable
         // Measured from key release, because that is the wait the user actually feels — and
         // it is the only figure on which a streaming and a batch engine compare honestly.
         var releasedAt = _clock.Now;
-        var audio = new ReadOnlyMemory<float>(samples.ToArray());
+
+        // Boost quiet recordings before the model sees them: a user's sessions produced
+        // perfect silence at a tenth of the level that transcribed fine earlier, and a
+        // model fed a faint murmur returns nothing at all. Boost-only, clipped, capped.
+        var audio = new ReadOnlyMemory<float>(AudioGain.Normalize(samples.ToArray()));
 
         var entries = _dictionary();
         var bias = DictionaryCorrector.BiasPhrases(entries);
@@ -296,6 +300,11 @@ public sealed class DictationEngine : IAsyncDisposable
             // Normal when nothing intelligible was said — but it must be visible, or a
             // misconfigured device looks identical to a working one.
             AppLog.Info("recording produced no recognised speech");
+            LastFault =
+                "No speech was recognised in the recording. If your voice is quiet in other "
+                + "apps too, raise the microphone level (Settings > System > Sound > Input) "
+            + "or speak closer to the mic.";
+            Faulted?.Invoke(this, EventArgs.Empty);
             return;
         }
 

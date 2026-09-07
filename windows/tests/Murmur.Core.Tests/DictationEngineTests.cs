@@ -427,3 +427,67 @@ public sealed class AudioSegmenterTests
         firstCut.ShouldBeLessThanOrEqualTo(quietStart + AudioChunk.SampleRate);
     }
 }
+
+/// <summary>
+/// The quiet-mic failure mode: a user's voice arrived at a tenth of the level that
+/// once transcribed fine, and the model returned nothing. Gain must rescue that.
+/// </summary>
+public sealed class AudioGainTests
+{
+    private static float Rms(float[] samples)
+    {
+        var sum = 0d;
+        foreach (var s in samples) sum += (double)s * s;
+        return MathF.Sqrt((float)(sum / samples.Length));
+    }
+
+    [Fact]
+    public void A_quiet_recording_is_boosted_to_near_target()
+    {
+        // A tenth of target, matching the measured failure: peak ~0.01, rms ~0.002.
+        var quiet = new float[16000];
+        for (var i = 0; i < quiet.Length; i++) quiet[i] = 0.003f * MathF.Sin(2 * MathF.PI * 220 * i / 16000);
+
+        var boosted = AudioGain.Normalize(quiet);
+
+        // The uncapped gain would be ~56x; the cap limits it to MaxGain. Assert the cap
+        // is applied exactly and the level lands an order of magnitude higher.
+        Rms(boosted).ShouldBe(Rms(quiet) * AudioGain.MaxGain, 0.001f);
+        Rms(boosted).ShouldBeGreaterThan(Rms(quiet) * 4);
+    }
+
+    [Fact]
+    public void A_healthy_recording_passes_through_untouched()
+    {
+        var healthy = new float[16000];
+        for (var i = 0; i < healthy.Length; i++) healthy[i] = 0.3f * MathF.Sin(2 * MathF.PI * 220 * i / 16000);
+
+        AudioGain.Normalize(healthy).ShouldBe(healthy);
+    }
+
+    [Fact]
+    public void A_boost_that_would_clip_is_capped_to_headroom()
+    {
+        // Peak already at ceiling with a low rms: gain must not push it over 0.99.
+        var spiky = new float[16000];
+        for (var i = 0; i < spiky.Length; i++) spiky[i] = 0.001f;
+        spiky[100] = 0.95f;
+
+        var boosted = AudioGain.Normalize(spiky);
+
+        foreach (var sample in boosted) MathF.Abs(sample).ShouldBeLessThanOrEqualTo(0.99f);
+    }
+
+    [Fact]
+    public void Digital_silence_is_returned_unchanged()
+    {
+        var silence = new float[16000];
+        AudioGain.Normalize(silence).ShouldBe(silence);
+    }
+
+    [Fact]
+    public void An_empty_recording_is_returned_unchanged()
+    {
+        AudioGain.Normalize([]).ShouldBe([]);
+    }
+}
