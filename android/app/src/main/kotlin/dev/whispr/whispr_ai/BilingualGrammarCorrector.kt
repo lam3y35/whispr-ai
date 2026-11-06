@@ -20,6 +20,11 @@ object BilingualGrammarCorrector {
         "do", "does", "did", "will", "have", "has", "am"
     )
 
+    private val enAuxiliaries = hashSetOf(
+        "do", "does", "did", "is", "are", "was", "were", "can", "could", "should", "would",
+        "will", "have", "has", "am"
+    )
+
     private val arQuestionStarters = hashSetOf(
         "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ"
     )
@@ -81,8 +86,24 @@ object BilingualGrammarCorrector {
         val lastChar = t.last()
         if (!lastChar.isLetterOrDigit()) return t
 
-        val firstWord = t.split(" ", limit = 2).first().trim().lowercase(Locale.ROOT)
-        return if (enQuestionStarters.contains(firstWord)) "$t?" else "$t."
+        return if (isEnglishQuestion(t)) "$t?" else "$t."
+    }
+
+    private fun isEnglishQuestion(text: String): Boolean {
+        val clauses = text.split(Regex("[,.!;:]"))
+        for (clause in clauses) {
+            val words = clause.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (words.isEmpty()) continue
+            val first = words[0].lowercase(Locale.ROOT)
+            if (first == "when" || first == "where" || first == "if") {
+                if (words.size > 1 && enAuxiliaries.contains(words[1].lowercase(Locale.ROOT))) {
+                    return true
+                }
+            } else if (enQuestionStarters.contains(first)) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun correctArabic(text: String): String {
@@ -98,7 +119,19 @@ object BilingualGrammarCorrector {
         val lastChar = t.last()
         if (!lastChar.isLetterOrDigit()) return t
 
-        val firstWord = t.split(" ", limit = 2).first().trim()
-        return if (arQuestionStarters.contains(firstWord)) "$t؟" else "$t."
+        return if (isArabicQuestion(t)) "$t؟" else "$t."
+    }
+
+    private fun isArabicQuestion(text: String): Boolean {
+        val clauses = text.split(Regex("[،؛؟.!,;]"))
+        for (clause in clauses) {
+            val words = clause.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
+            if (words.isEmpty()) continue
+            val first = words[0].replace(Regex("[،؛؟.!,;]"), "")
+            if (arQuestionStarters.contains(first)) {
+                return true
+            }
+        }
+        return false
     }
 }

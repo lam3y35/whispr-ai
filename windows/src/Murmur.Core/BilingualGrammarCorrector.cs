@@ -38,7 +38,6 @@ public class BilingualGrammarCorrector
         @"\bi('(?:m|ve|ll|d))\b",
         RegexOptions.Compiled);
 
-    // Question start words
     private static readonly HashSet<string> EnQuestionStarters = new(StringComparer.OrdinalIgnoreCase)
     {
         "who", "what", "where", "when", "why", "how",
@@ -46,10 +45,20 @@ public class BilingualGrammarCorrector
         "do", "does", "did", "will", "have", "has", "am"
     };
 
+    private static readonly HashSet<string> EnAuxiliaries = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "do", "does", "did", "is", "are", "was", "were", "can", "could", "should", "would",
+        "will", "have", "has", "am"
+    };
+
     private static readonly HashSet<string> ArQuestionStarters = new()
     {
         "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ"
     };
+
+    private static readonly char[] EnClauseDelimiters = [',', '.', '!', ';', ':'];
+    private static readonly char[] ArClauseDelimiters = ['،', '؛', '؟', '.', '!', ',', ';'];
+    private static readonly char[] PunctuationToTrim = ['،', '؛', '؟', '.', '!', ',', ';'];
 
     /// <summary>Whether the text predominantly contains Arabic characters.</summary>
     public static bool IsArabic(string text)
@@ -120,22 +129,37 @@ public class BilingualGrammarCorrector
         text = Regex.Replace(text, @"([.!?]\s+)([a-z])", m =>
             m.Groups[1].Value + char.ToUpperInvariant(m.Groups[2].Value[0]));
 
-        // Check if sentence starts with a question word and lacks terminal punctuation
+        // Check if sentence starts with a question and lacks terminal punctuation
         var lastChar = text[^1];
         if (!char.IsPunctuation(lastChar))
         {
-            var firstWord = text.Split(' ', 2)[0].Trim();
-            if (EnQuestionStarters.Contains(firstWord))
-            {
-                text += "?";
-            }
-            else
-            {
-                text += ".";
-            }
+            text += IsEnglishQuestion(text) ? "?" : ".";
         }
 
         return text;
+    }
+
+    private static bool IsEnglishQuestion(string text)
+    {
+        var clauses = text.Split(EnClauseDelimiters, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var clause in clauses)
+        {
+            var words = clause.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) continue;
+            var first = words[0];
+            if (first.Equals("when", StringComparison.OrdinalIgnoreCase) ||
+                first.Equals("where", StringComparison.OrdinalIgnoreCase) ||
+                first.Equals("if", StringComparison.OrdinalIgnoreCase))
+            {
+                if (words.Length > 1 && EnAuxiliaries.Contains(words[1]))
+                    return true;
+            }
+            else if (EnQuestionStarters.Contains(first))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static string CorrectArabic(string text)
@@ -153,17 +177,23 @@ public class BilingualGrammarCorrector
         var lastChar = text[^1];
         if (!char.IsPunctuation(lastChar))
         {
-            var firstWord = text.Split(' ', 2)[0].Trim();
-            if (ArQuestionStarters.Contains(firstWord))
-            {
-                text += "؟";
-            }
-            else
-            {
-                text += ".";
-            }
+            text += IsArabicQuestion(text) ? "؟" : ".";
         }
 
         return text;
+    }
+
+    private static bool IsArabicQuestion(string text)
+    {
+        var clauses = text.Split(ArClauseDelimiters, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var clause in clauses)
+        {
+            var words = clause.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0) continue;
+            var first = words[0].Trim(PunctuationToTrim);
+            if (ArQuestionStarters.Contains(first))
+                return true;
+        }
+        return false;
     }
 }

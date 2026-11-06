@@ -1,4 +1,4 @@
-/// Bilingual grammar and punctuation corrector for English and Arabic.
+// Bilingual grammar and punctuation corrector for English and Arabic.
 
 final RegExp _enFillers = RegExp(r'\b(um|uh|uhm|er|ah|erm)\b[,\s]*', caseSensitive: false);
 final RegExp _arFillers = RegExp(r'(^|\s)(يعني|أمم|اممم|آآآ|ااه|إيه|هاه|يعنى)(\s|$|(?=[،.؟!]))');
@@ -16,6 +16,11 @@ const Set<String> _enQuestionStarters = {
   'who', 'what', 'where', 'when', 'why', 'how',
   'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would',
   'do', 'does', 'did', 'will', 'have', 'has', 'am'
+};
+
+const Set<String> _enAuxiliaries = {
+  'do', 'does', 'did', 'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would',
+  'will', 'have', 'has', 'am'
 };
 
 const Set<String> _arQuestionStarters = {
@@ -62,6 +67,36 @@ String correctBilingualGrammar(String? raw, [String language = 'auto']) {
   return isAr ? _correctArabic(text) : _correctEnglish(text);
 }
 
+bool _isEnQuestion(String text) {
+  final clauses = text.split(RegExp(r'[,.!;:]'));
+  for (final c in clauses) {
+    final words = c.trim().split(RegExp(r'\s+'));
+    if (words.isEmpty || words.first.isEmpty) continue;
+    final first = words.first.toLowerCase();
+    if (first == 'when' || first == 'where' || first == 'if') {
+      if (words.length > 1 && _enAuxiliaries.contains(words[1].toLowerCase())) {
+        return true;
+      }
+    } else if (_enQuestionStarters.contains(first)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool _isArQuestion(String text) {
+  final clauses = text.split(RegExp(r'[،؛؟.!,;]'));
+  for (final c in clauses) {
+    final words = c.trim().split(RegExp(r'\s+'));
+    if (words.isEmpty || words.first.isEmpty) continue;
+    final first = words.first.replaceAll(RegExp(r'[،؛؟.!,;]'), '');
+    if (_arQuestionStarters.contains(first)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 String _correctEnglish(String text) {
   var t = text;
   t = t.replaceAllMapped(_standaloneI, (m) => '${m.group(1)}I${m.group(2)}');
@@ -76,8 +111,7 @@ String _correctEnglish(String text) {
 
   final lastChar = t[t.length - 1];
   if (_unicodeWordChar.hasMatch(lastChar)) {
-    final firstWord = t.split(' ').first.trim().toLowerCase();
-    t = _enQuestionStarters.contains(firstWord) ? '$t?' : '$t.';
+    t = _isEnQuestion(t) ? '$t?' : '$t.';
   }
 
   return t;
@@ -94,8 +128,7 @@ String _correctArabic(String text) {
 
   final lastChar = t[t.length - 1];
   if (_unicodeWordChar.hasMatch(lastChar)) {
-    final firstWord = t.split(' ').first.trim();
-    t = _arQuestionStarters.contains(firstWord) ? '$t؟' : '$t.';
+    t = _isArQuestion(t) ? '$t؟' : '$t.';
   }
 
   return t;

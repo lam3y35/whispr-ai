@@ -28,9 +28,9 @@ public sealed record SettingsData
 {
     /// <summary>
     /// Virtual-key code of the push-to-talk key.
-    /// Defaults to Any Control (0x11) so touching either Control button starts recording.
+    /// Defaults to Right Control (0xA3); users can select Any Control (0x11) or Left Control (0xA2).
     /// </summary>
-    public int PushToTalkKey { get; init; } = 0x11;
+    public int PushToTalkKey { get; init; } = 0xA3;
 
     /// <summary>Trigger mode: Smart (tap or hold), TapToToggle, or HoldToTalk.</summary>
     public PushToTalkMode PushToTalkMode { get; init; } = PushToTalkMode.Smart;
