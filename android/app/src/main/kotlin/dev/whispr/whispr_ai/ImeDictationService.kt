@@ -115,9 +115,7 @@ enum class KeyboardMode { ENGLISH, ARABIC, SYMBOLS, SYMBOLS_EXT, EMOJI, CLIPBOAR
 class ImeDictationService : InputMethodService(), RecognitionListener {
 
     private var recognizer: SpeechRecognizer? = null
-    private var audioRecorder: WhisperAudioRecorder? = null
     private var listening = false
-    private var isUsingWhisperTurbo = false
     private var rules: List<DictionaryCorrector.Rule> = emptyList()
     private var language: String = "auto"
 
@@ -158,7 +156,6 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
     private fun dpF(v: Float): Float = v * resources.displayMetrics.density
 
     override fun onCreateInputView(): View {
-        audioRecorder = WhisperAudioRecorder(this)
         rules = DictionaryStore.rules(this)
         val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
         language = prefs.getString("language", "auto") ?: "auto"
@@ -954,41 +951,6 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
     private fun toggleListening() {
         if (listening) {
             listening = false
-            if (isUsingWhisperTurbo) {
-                dictationButton.text = "⏳ Wait..."
-                statusText.text = "✨ جاري المعالجة بـ Whisper Turbo..."
-                statusText.setTextColor(tealAccent)
-
-                Thread {
-                    val audioFile = audioRecorder?.stop()
-                    if (audioFile == null || audioFile.length() < 100) {
-                        Handler(Looper.getMainLooper()).post {
-                            statusText.text = "no audio recorded"
-                            setIdleUi()
-                        }
-                        return@Thread
-                    }
-                    val result = WhisperTurboClient.transcribe(this, audioFile, language)
-                    Handler(Looper.getMainLooper()).post {
-                        when (result) {
-                            is WhisperTurboClient.Result.Success -> {
-                                val (dictCorrected, applied) = DictionaryCorrector.apply(result.text, rules)
-                                val cleaned = BilingualGrammarCorrector.correct(dictCorrected, language)
-                                currentInputConnection?.commitText(cleaned + " ", 1)
-                                DictionaryStore.appendTranscript(this, cleaned, applied)
-                                val note = if (applied.isNotEmpty()) " (${applied.sumOf { it.count }} corrected)" else ""
-                                statusText.text = "Inserted: $cleaned$note"
-                                Handler(Looper.getMainLooper()).postDelayed({ setIdleUi() }, 2500)
-                            }
-                            is WhisperTurboClient.Result.Error -> {
-                                statusText.text = "⚠️ ${result.message}"
-                                Handler(Looper.getMainLooper()).postDelayed({ setIdleUi() }, 3000)
-                            }
-                        }
-                    }
-                }.start()
-                return
-            }
             recognizer?.stopListening()
             setIdleUi()
             return
@@ -1008,36 +970,9 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
         language = prefs.getString("language", "auto") ?: "auto"
 
-        val modelPref = WhisperTurboClient.getModelPreference(this)
-        val hasKey = WhisperTurboClient.hasApiKey(this)
-
-        if (modelPref == "whisper_turbo" && hasKey) {
-            isUsingWhisperTurbo = true
-            val started = audioRecorder?.start() ?: false
-            if (started) {
-                listening = true
-                dictationButton.text = "● STOP"
-                dictationButton.setTextColor(Color.WHITE)
-                dictationButton.background = GradientDrawable().apply {
-                    shape = GradientDrawable.RECTANGLE
-                    cornerRadius = dpF(16f)
-                    setColor(recRed)
-                }
-                statusText.text = "🎙️ تحدث بحرية... (Whisper Turbo)"
-                statusText.setTextColor(recRedLit)
-                return
-            }
-        }
-
-        // Standard / Device Recognizer with warm-up cue
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             statusText.text = "no speech service on this device"
             return
-        }
-
-        isUsingWhisperTurbo = false
-        if (modelPref == "whisper_turbo" && !hasKey) {
-            statusText.text = "Tip: Add Groq key for Whisper Turbo"
         }
 
         recognizer?.destroy()
@@ -1144,7 +1079,7 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
 
     override fun onReadyForSpeech(params: Bundle?) {
         Handler(Looper.getMainLooper()).post {
-            if (listening && !isUsingWhisperTurbo) {
+            if (listening) {
                 dictationButton.text = "● STOP"
                 dictationButton.setTextColor(Color.WHITE)
                 dictationButton.background = GradientDrawable().apply {
@@ -1165,8 +1100,6 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
 
     override fun onDestroy() {
         backspaceHandler.removeCallbacks(backspaceRunnable)
-        audioRecorder?.cleanup()
-        audioRecorder = null
         recognizer?.destroy()
         super.onDestroy()
     }

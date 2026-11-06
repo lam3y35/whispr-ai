@@ -109,15 +109,10 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _recording = false;
   double _level = 0;
   String _language = 'auto';
-  String _modelPreference = 'whisper_turbo';
   String? _deviceSummary;
   bool _floatingButtonActive = false;
   bool _accessibilityEnabled = false;
   bool _smartMode = true;
-  String _apiKey = '';
-  bool _isTestingKey = false;
-  String? _keyTestMessage;
-  final TextEditingController _apiKeyController = TextEditingController();
 
   @override
   void initState() {
@@ -137,21 +132,6 @@ class _HomeScreenState extends State<HomeScreen> {
       }).catchError((dynamic _) {
         return null;
       });
-      bridge.invokeMethod<String>('getModelPreference').then((val) {
-        if (val != null && mounted) setState(() => _modelPreference = val);
-      }).catchError((dynamic _) {
-        return null;
-      });
-      bridge.invokeMethod<String>('getApiKey').then((val) {
-        if (val != null && mounted) {
-          setState(() {
-            _apiKey = val;
-            _apiKeyController.text = val;
-          });
-        }
-      }).catchError((dynamic _) {
-        return null;
-      });
       bridge.invokeMethod<Map<dynamic, dynamic>>('getDeviceInfo').then((info) {
         if (info != null && mounted) {
           setState(() => _deviceSummary = info['summary'] as String?);
@@ -160,12 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return null;
       });
     }
-  }
-
-  @override
-  void dispose() {
-    _apiKeyController.dispose();
-    super.dispose();
   }
 
   Future<void> _checkFloatingButtonStatus() async {
@@ -261,61 +235,6 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _language = lang);
     if (_isAndroid) {
       await bridge.invokeMethod('setLanguage', {'language': lang});
-    }
-  }
-
-  Future<void> _setModelPreference(String pref) async {
-    setState(() => _modelPreference = pref);
-    if (_isAndroid) {
-      await bridge.invokeMethod('setModelPreference', {'preference': pref});
-    }
-  }
-
-  Future<void> _saveApiKey(String key) async {
-    final trimmed = key.trim();
-    setState(() {
-      _apiKey = trimmed;
-      _keyTestMessage = null;
-    });
-    if (_isAndroid) {
-      await bridge.invokeMethod('setApiKey', {'apiKey': trimmed});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ API Key saved successfully!')),
-        );
-      }
-    }
-  }
-
-  Future<void> _testApiKey() async {
-    if (!_isAndroid) return;
-    setState(() {
-      _isTestingKey = true;
-      _keyTestMessage = null;
-    });
-    try {
-      final res = await bridge.invokeMethod<Map<dynamic, dynamic>>(
-          'testApiKey', {'apiKey': _apiKeyController.text.trim()});
-      if (res != null && mounted) {
-        final success = res['success'] as bool? ?? false;
-        final msg = res['message'] as String? ?? '';
-        setState(() {
-          _keyTestMessage = success ? '✓ $msg' : '⚠️ $msg';
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _keyTestMessage = '⚠️ Connection error: $e');
-      }
-    } finally {
-      if (mounted) setState(() => _isTestingKey = false);
-    }
-  }
-
-  Future<void> _openGroqConsole() async {
-    if (_isAndroid) {
-      await bridge.invokeMethod(
-          'openBrowserUrl', {'url': 'https://console.groq.com/keys'});
     }
   }
 
@@ -427,181 +346,28 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 14),
-            const _Label('AI SPEECH MODEL · موديل الذكاء الاصطناعي'),
-            const SizedBox(height: 10),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _LangChip(
-                  label: '⚡ WHISPER TURBO (BEST)',
-                  selected: _modelPreference == 'whisper_turbo' || _modelPreference == 'best',
-                  onTap: () => _setModelPreference('whisper_turbo'),
-                ),
-                const SizedBox(width: 8),
-                _LangChip(
-                  label: '📱 DEVICE (OFFLINE)',
-                  selected: _modelPreference == 'device' || _modelPreference == 'default',
-                  onTap: () => _setModelPreference('device'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_isAndroid && (_modelPreference == 'whisper_turbo' || _modelPreference == 'best')) ...[
+            const SizedBox(height: 16),
+            if (_isAndroid)
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   color: Tokens.panel,
-                  border: Border.all(
-                    color: _apiKey.isNotEmpty ? const Color(0xFF00E5FF) : Tokens.amber,
-                    width: 1.2,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Row(
-                      children: [
-                        const Text('⚡', style: TextStyle(fontSize: 18)),
-                        const SizedBox(width: 8),
-                        const Expanded(
-                          child: Text(
-                            'Whisper Large-v3-Turbo (WisprFlow AI)',
-                            style: TextStyle(
-                              color: Color(0xFF00E5FF),
-                              fontWeight: FontWeight.w700,
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: _apiKey.isNotEmpty ? const Color(0x334CAF50) : const Color(0x33D9A441),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _apiKey.isNotEmpty ? Colors.greenAccent : Tokens.amber,
-                            ),
-                          ),
-                          child: Text(
-                            _apiKey.isNotEmpty ? '✓ READY' : 'KEY NEEDED',
-                            style: TextStyle(
-                              color: _apiKey.isNotEmpty ? Colors.greenAccent : Tokens.amber,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'أحدث وأقوى موديل صوتي عالمياً (0.15 ثانية): يفهم الكلام السريع واللهجات العامية (المصرية والخليجية والشامية) وعلامات الترقيم بدقة فائقة وبدون أي تأخير!\n'
-                      'Ultra-fast (0.15s) Groq Whisper Large-v3-Turbo: Understands fast talking, Egyptian & Arabic dialects, and native punctuation.',
-                      style: TextStyle(color: Tokens.ink, fontSize: 11, height: 1.4),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _apiKeyController,
-                            style: const TextStyle(color: Tokens.ink, fontSize: 12, fontFamily: Tokens.mono),
-                            decoration: const InputDecoration(
-                              hintText: 'Paste Groq API Key (gsk_...)',
-                              hintStyle: TextStyle(color: Tokens.muted, fontSize: 11),
-                              contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                              filled: true,
-                              fillColor: Colors.black38,
-                              isDense: true,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(6)),
-                                borderSide: BorderSide(color: Tokens.panelEdge),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.all(Radius.circular(6)),
-                                borderSide: BorderSide(color: Color(0xFF00E5FF)),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: () => _saveApiKey(_apiKeyController.text),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00E5FF),
-                            foregroundColor: Colors.black,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            minimumSize: const Size(0, 36),
-                          ),
-                          child: const Text('Save', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.key, size: 14, color: Tokens.amber),
-                            label: const Text(
-                              'Get Free Groq Key (مفتاح مجاني)',
-                              style: TextStyle(fontSize: 11, color: Tokens.ink),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: const BorderSide(color: Tokens.amber),
-                              padding: const EdgeInsets.symmetric(vertical: 6),
-                            ),
-                            onPressed: _openGroqConsole,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton(
-                          onPressed: _isTestingKey ? null : _testApiKey,
-                          style: OutlinedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          ),
-                          child: _isTestingKey
-                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                              : const Text('Test Key', style: TextStyle(fontSize: 11, color: Tokens.ink)),
-                        ),
-                      ],
-                    ),
-                    if (_keyTestMessage != null) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        _keyTestMessage!,
-                        style: TextStyle(
-                          color: _keyTestMessage!.startsWith('✓') ? Colors.greenAccent : Colors.redAccent,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ] else if (_isAndroid) ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Tokens.panel,
                   border: Border.all(color: Tokens.panelEdge),
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.phone_android, size: 18, color: Tokens.muted),
-                    SizedBox(width: 10),
+                    Icon(Icons.lock_outline, size: 20, color: Color(0xFF00E5FF)),
+                    SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'On-device speech recognizer active. Works completely offline without internet or API key.\nمحرك الهاتف المحلي يعمل بدون إنترنت ولا يتطلب أي إعداد.',
-                        style: TextStyle(color: Tokens.muted, fontSize: 11, height: 1.3),
+                        '100% On-Device & Private · Completely offline without internet or API keys.\nمحرك صوتي محلي خاص بنسبة 100% يعمل بدون إنترنت ولا يحتاج أي مفاتيح.',
+                        style: TextStyle(color: Tokens.ink, fontSize: 12, height: 1.3),
                       ),
                     ),
                   ],
                 ),
               ),
-            ],
             if (_deviceSummary != null) ...[
               const SizedBox(height: 8),
               Text(

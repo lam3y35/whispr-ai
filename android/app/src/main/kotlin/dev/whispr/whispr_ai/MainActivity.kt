@@ -27,9 +27,6 @@ class MainActivity : FlutterActivity(), RecognitionListener {
 
     private var channel: MethodChannel? = null
     private var recognizer: SpeechRecognizer? = null
-    private var audioRecorder: WhisperAudioRecorder? = null
-    private var isUsingWhisperTurbo = false
-    private var levelPollingThread: Thread? = null
     private var rules: List<DictionaryCorrector.Rule> = emptyList()
     private var inAppFinal = ""
 
@@ -102,39 +99,6 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                                 "summary" to "${Build.MANUFACTURER} ${Build.MODEL} · Mobile RAM Optimized · Android ${Build.VERSION.RELEASE}"
                             )
                         )
-                    }
-
-                    "getModelPreference" -> {
-                        result.success(WhisperTurboClient.getModelPreference(this@MainActivity))
-                    }
-
-                    "setModelPreference" -> {
-                        val pref = call.argument<String>("preference") ?: "whisper_turbo"
-                        WhisperTurboClient.setModelPreference(this@MainActivity, pref)
-                        result.success(null)
-                    }
-
-                    "getApiKey" -> {
-                        result.success(WhisperTurboClient.getApiKey(this@MainActivity))
-                    }
-
-                    "setApiKey" -> {
-                        val key = call.argument<String>("apiKey") ?: ""
-                        WhisperTurboClient.setApiKey(this@MainActivity, key)
-                        result.success(null)
-                    }
-
-                    "testApiKey" -> {
-                        val key = call.argument<String>("apiKey") ?: WhisperTurboClient.getApiKey(this@MainActivity)
-                        Thread {
-                            val res = WhisperTurboClient.testKey(key)
-                            runOnUiThread {
-                                when (res) {
-                                    is WhisperTurboClient.Result.Success -> result.success(mapOf("success" to true, "message" to res.text))
-                                    is WhisperTurboClient.Result.Error -> result.success(mapOf("success" to false, "message" to res.message))
-                                }
-                            }
-                        }.start()
                     }
 
                     "startDictation" -> startDictation(result)
@@ -290,34 +254,6 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         rules = DictionaryStore.rules(this)
         inAppFinal = ""
 
-        val modelPref = WhisperTurboClient.getModelPreference(this)
-        val hasKey = WhisperTurboClient.hasApiKey(this)
-
-        if (modelPref == "whisper_turbo" && hasKey) {
-            isUsingWhisperTurbo = true
-            if (audioRecorder == null) {
-                audioRecorder = WhisperAudioRecorder(this)
-            }
-            val started = audioRecorder?.start() ?: false
-            if (started) {
-                recognizerResult = result
-                // Poll level for visualizer VU meter
-                levelPollingThread?.interrupt()
-                levelPollingThread = Thread {
-                    try {
-                        while (isUsingWhisperTurbo) {
-                            val amp = audioRecorder?.getMaxAmplitude() ?: 0
-                            val db = if (amp > 0) 20 * Math.log10(amp.toDouble() / 32767.0) else -60.0
-                            runOnUiThread { channel?.invokeMethod("level", db) }
-                            Thread.sleep(60)
-                        }
-                    } catch (_: InterruptedException) {}
-                }.apply { start() }
-                return
-            }
-        }
-
-        isUsingWhisperTurbo = false
         recognizer?.destroy()
         recognizer = createSpeechRecognizerSafely()
         if (recognizer == null) {
@@ -358,49 +294,8 @@ class MainActivity : FlutterActivity(), RecognitionListener {
     }
 
     private fun stopDictation(result: MethodChannel.Result) {
-        if (isUsingWhisperTurbo) {
-            isUsingWhisperTurbo = false
-            levelPollingThread?.interrupt()
-            levelPollingThread = null
-            Thread {
-                val audioFile = audioRecorder?.stop()
-                if (audioFile == null || audioFile.length() < 100) {
-                    runOnUiThread {
-                        recognizerResult?.success(mapOf("error" to "no_speech"))
-                        recognizerResult = null
-                    }
-                    return@Thread
-                }
-                val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
-                val lang = prefs.getString("language", "auto") ?: "auto"
-                val transcription = WhisperTurboClient.transcribe(this@MainActivity, audioFile, lang)
-                runOnUiThread {
-                    when (transcription) {
-                        is WhisperTurboClient.Result.Success -> {
-                            val (dictCorrected, applied) = DictionaryCorrector.apply(transcription.text, rules)
-                            val corrected = BilingualGrammarCorrector.correct(dictCorrected, lang)
-                            DictionaryStore.appendTranscript(this@MainActivity, corrected, applied)
-                            recognizerResult?.success(
-                                mapOf(
-                                    "text" to corrected,
-                                    "corrections" to applied.map {
-                                        mapOf("from" to it.from, "to" to it.to, "count" to it.count)
-                                    },
-                                )
-                            )
-                        }
-                        is WhisperTurboClient.Result.Error -> {
-                            recognizerResult?.success(mapOf("error" to transcription.message))
-                        }
-                    }
-                    recognizerResult = null
-                }
-            }.start()
-            result.success(true)
-        } else {
-            recognizer?.stopListening()
-            result.success(true)
-        }
+        recognizer?.stopListening()
+        result.success(true)
     }
 
     private var recognizerResult: MethodChannel.Result? = null
@@ -479,11 +374,6 @@ class MainActivity : FlutterActivity(), RecognitionListener {
     }
 
     override fun cleanUpFlutterEngine(engine: FlutterEngine) {
-        isUsingWhisperTurbo = false
-        levelPollingThread?.interrupt()
-        levelPollingThread = null
-        audioRecorder?.cleanup()
-        audioRecorder = null
         recognizer?.destroy()
         super.cleanUpFlutterEngine(engine)
     }

@@ -49,9 +49,7 @@ class FloatingDictationService : Service(), RecognitionListener {
     private lateinit var micIconText: TextView
 
     private var recognizer: SpeechRecognizer? = null
-    private var audioRecorder: WhisperAudioRecorder? = null
     private var isRecording = false
-    private var isUsingWhisperTurbo = false
     private var rules: List<DictionaryCorrector.Rule> = emptyList()
     private var language: String = "auto"
 
@@ -100,7 +98,6 @@ class FloatingDictationService : Service(), RecognitionListener {
         language = prefs.getString("language", "auto") ?: "auto"
         isSmartMode = prefs.getBoolean("smart_flying_button", true)
 
-        audioRecorder = WhisperAudioRecorder(this)
         startForegroundServiceNotification()
         createFloatingWidget()
     }
@@ -298,33 +295,9 @@ class FloatingDictationService : Service(), RecognitionListener {
         val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
         language = prefs.getString("language", "auto") ?: "auto"
 
-        val modelPref = WhisperTurboClient.getModelPreference(this)
-        val hasKey = WhisperTurboClient.hasApiKey(this)
-
-        if (modelPref == "whisper_turbo" && hasKey) {
-            isUsingWhisperTurbo = true
-            val started = audioRecorder?.start() ?: false
-            if (started) {
-                isRecording = true
-                floatingMicButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-                floatingMicButton.background = createCircleDrawable(redRec, Color.WHITE)
-                micIconText.text = "⏹️"
-                liveTranscriptBubble.text = "🎙️ تحدث بحرية... أنا أسمعك (Whisper Turbo)"
-                liveTranscriptBubble.setTextColor(textWhite)
-                liveTranscriptBubble.visibility = View.VISIBLE
-                return
-            }
-        }
-
-        // Fallback / Standard mode: System Recognizer with ready-for-speech indicator
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             Toast.makeText(this, "Speech recognition is not available on this device", Toast.LENGTH_SHORT).show()
             return
-        }
-
-        isUsingWhisperTurbo = false
-        if (modelPref == "whisper_turbo" && !hasKey) {
-            Toast.makeText(this, "Tip: Add free Groq key in Whispr AI to activate Whisper Turbo", Toast.LENGTH_SHORT).show()
         }
 
         recognizer?.destroy()
@@ -368,39 +341,8 @@ class FloatingDictationService : Service(), RecognitionListener {
 
     private fun stopRecording() {
         isRecording = false
-        if (isUsingWhisperTurbo) {
-            floatingMicButton.background = createCircleDrawable(darkBg, tealColor)
-            micIconText.text = "⏳"
-            liveTranscriptBubble.text = "✨ جاري المعالجة بـ Whisper Turbo..."
-            liveTranscriptBubble.setTextColor(tealColor)
-
-            Thread {
-                val audioFile = audioRecorder?.stop()
-                if (audioFile == null || audioFile.length() < 100) {
-                    mainHandler.post {
-                        liveTranscriptBubble.text = "No audio recorded"
-                        resetIdleState()
-                    }
-                    return@Thread
-                }
-                val result = WhisperTurboClient.transcribe(this, audioFile, language)
-                mainHandler.post {
-                    when (result) {
-                        is WhisperTurboClient.Result.Success -> {
-                            handleFinalText(result.text)
-                        }
-                        is WhisperTurboClient.Result.Error -> {
-                            liveTranscriptBubble.text = "⚠️ ${result.message}"
-                            liveTranscriptBubble.setTextColor(Color.parseColor("#FF5252"))
-                            resetIdleState()
-                        }
-                    }
-                }
-            }.start()
-        } else {
-            recognizer?.stopListening()
-            liveTranscriptBubble.text = "Processing grammar…"
-        }
+        recognizer?.stopListening()
+        liveTranscriptBubble.text = "Processing grammar…"
     }
 
     private fun handleFinalText(raw: String) {
@@ -450,7 +392,7 @@ class FloatingDictationService : Service(), RecognitionListener {
     override fun onReadyForSpeech(params: Bundle?) {
         // Microphone hardware is now warm and actively capturing samples!
         mainHandler.post {
-            if (isRecording && !isUsingWhisperTurbo) {
+            if (isRecording) {
                 floatingMicButton.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                 floatingMicButton.background = createCircleDrawable(redRec, Color.WHITE)
                 micIconText.text = "⏹️"
@@ -498,8 +440,6 @@ class FloatingDictationService : Service(), RecognitionListener {
         if (instance == this) {
             instance = null
         }
-        audioRecorder?.cleanup()
-        audioRecorder = null
         recognizer?.destroy()
         try {
             if (::overlayView.isInitialized) {
