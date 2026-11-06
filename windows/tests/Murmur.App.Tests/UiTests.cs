@@ -7,6 +7,7 @@ using Murmur.App.Controls;
 using Murmur.App.Design;
 using Murmur.App.Views;
 using Shouldly;
+using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(Murmur.AppTests.TestAppBuilder))]
 
