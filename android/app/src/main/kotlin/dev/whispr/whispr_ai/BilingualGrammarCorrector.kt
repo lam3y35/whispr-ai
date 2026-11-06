@@ -26,7 +26,8 @@ object BilingualGrammarCorrector {
     )
 
     private val arQuestionStarters = hashSetOf(
-        "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ"
+        "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ",
+        "ازاي", "ليه", "فين", "إيه", "ايه", "مين", "كام", "شو", "وين", "علاش", "شلون", "شنو", "ايش"
     )
 
     fun isArabic(text: String): Boolean {
@@ -112,14 +113,22 @@ object BilingualGrammarCorrector {
             .replace(';', '؛')
             .replace('?', '؟')
 
-        // Normalize spacing around Arabic punctuation
+        // 1. Remove stray dots between words (system recognizers often fragment phrases with dots)
+        t = t.replace(Regex("(?<=[\\p{L}\\p{N}])\\s*\\.\\s*(?=[\\p{L}\\p{N}])"), " ")
+        t = t.replace(Regex("\\.{2,}"), " ")
+
+        // 2. Normalize spacing around Arabic punctuation
         t = t.replace(Regex("\\s+([،؛؟.\\!])"), "$1")
         t = t.replace(Regex("([،؛؟.\\!])(?=[\\p{L}\\p{N}])"), "$1 ")
 
-        val lastChar = t.last()
-        if (!lastChar.isLetterOrDigit()) return t
+        // 3. Remove accidental trailing dots
+        t = t.trimEnd('.', ' ')
+        if (t.isEmpty()) return ""
 
-        return if (isArabicQuestion(t)) "$t؟" else "$t."
+        val lastChar = t.last()
+        if (lastChar == '؟' || lastChar == '!' || lastChar == '،') return t
+
+        return if (isArabicQuestion(t)) "$t؟" else t
     }
 
     private fun isArabicQuestion(text: String): Boolean {

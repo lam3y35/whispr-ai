@@ -133,6 +133,26 @@ If you prefer not to switch keyboards, you can use the **Flying / Floating Butto
 3. Tap the push-to-talk mic button, speak, and the corrected text is inserted directly at your cursor.
 4. Enjoy the obsidian & cyan theme, Arabic & English layouts, emoji bar, and clipboard history.
 
+### AI Models on Android: Whisper Large-v3-Turbo vs. On-Device
+Whispr AI offers two speech recognition tiers on Android:
+
+1. **⚡ Whisper Large-v3-Turbo (WhisperFlow AI) — Recommended (الأفضل والأسرع)**:
+   - **Performance**: Ultra-fast (0.15s latency) running on Groq's high-speed LPU infrastructure.
+   - **Accuracy**: Understands fast continuous talking, murmurs, colloquial Egyptian Arabic (*"عايز اخلص الموضوع ده بسرعة"*), Gulf, Levantine, Maghrebi, and English without needing to speak slowly or over-enunciate!
+   - **Grammar & Punctuation**: Places natural punctuation, commas, and question marks automatically.
+   - **Cost**: **100% Free** via Groq Cloud (14,400 free requests per day, no credit card required).
+   - **Setup (10 seconds)**:
+     1. Open Whispr AI app.
+     2. Under **AI SPEECH MODEL**, select **`⚡ WHISPER TURBO (BEST)`**.
+     3. Tap **"Get Free Groq Key (مفتاح مجاني)"** → sign in with Google or GitHub on `console.groq.com` and copy your key.
+     4. Paste your key into the text field in Whispr AI and tap **Save**.
+     5. Now your Flying Button, Keyboard, and in-app dictation are powered by the world's most advanced speech AI!
+
+2. **📱 On-Device Recognizer (محرك الهاتف المحلي)**:
+   - Works completely offline without internet or API key.
+   - Ideal when traveling or in areas without signal.
+   - Upgraded with ready-to-speak haptic cue to prevent missing the first word, and dialect prioritization for Egyptian Arabic (`ar-EG`).
+
 ### Offline Speech Recognition & Lightweight Mobile Model
 Because phone RAM is constrained compared to a laptop or PC, Whispr AI on Android defaults to the **lightweight tier**:
 * Uses Android's built-in on-device speech engine (or Whisper Tiny ~39 MB) which consumes minimal RAM (< 150 MB) and preserves your phone's battery.

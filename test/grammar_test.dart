@@ -42,5 +42,15 @@ void main() {
       final res = correctBilingualGrammar('مرحبا , كيف حالك');
       expect(res, 'مرحبا، كيف حالك؟');
     });
+
+    test('Egyptian Arabic question words receive question mark', () {
+      final res = correctBilingualGrammar('ازاي انزل التطبيق على الموبايل');
+      expect(res, 'ازاي انزل التطبيق على الموبايل؟');
+    });
+
+    test('Stray dots between words from system recognizers are removed', () {
+      final res = correctBilingualGrammar('انا. عاوز. اكتب. رساله');
+      expect(res, 'انا عاوز اكتب رساله.');
+    });
   });
 }

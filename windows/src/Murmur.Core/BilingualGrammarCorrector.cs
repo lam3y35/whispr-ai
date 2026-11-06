@@ -53,7 +53,8 @@ public class BilingualGrammarCorrector
 
     private static readonly HashSet<string> ArQuestionStarters = new()
     {
-        "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ"
+        "هل", "ماذا", "ما", "كيف", "متى", "أين", "لماذا", "كم", "من", "أي", "أ",
+        "ازاي", "ليه", "فين", "إيه", "ايه", "مين", "كام", "شو", "وين", "علاش", "شلون", "شنو", "ايش"
     };
 
     private static readonly char[] EnClauseDelimiters = [',', '.', '!', ';', ':'];
@@ -168,6 +169,10 @@ public class BilingualGrammarCorrector
         text = text.Replace(',', '،')
                    .Replace(';', '؛')
                    .Replace('?', '؟');
+
+        // Remove stray dots between words from system recognizer fragmentation
+        text = Regex.Replace(text, @"(?<=[\p{L}\p{N}])\s*\.\s*(?=[\p{L}\p{N}])", " ");
+        text = Regex.Replace(text, @"\.{2,}", " ");
 
         // Normalize spacing: no space before punctuation, single space after
         text = Regex.Replace(text, @"\s+([،؛؟.\!])", "$1");

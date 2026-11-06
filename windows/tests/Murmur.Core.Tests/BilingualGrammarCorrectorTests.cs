@@ -82,6 +82,22 @@ public sealed class BilingualGrammarCorrectorTests
     }
 
     [Fact]
+    public void Egyptian_arabic_question_starters_receive_arabic_question_mark()
+    {
+        var input = "ازاي انزل التطبيق على الموبايل";
+        var result = _corrector.Correct(input);
+        result.ShouldBe("ازاي انزل التطبيق على الموبايل؟");
+    }
+
+    [Fact]
+    public void Stray_dots_between_words_are_removed()
+    {
+        var input = "انا. عاوز. اكتب. رساله";
+        var result = _corrector.Correct(input);
+        result.ShouldBe("انا عاوز اكتب رساله.");
+    }
+
+    [Fact]
     public void Empty_or_whitespace_returns_empty()
     {
         _corrector.Correct("   ").ShouldBe(string.Empty);

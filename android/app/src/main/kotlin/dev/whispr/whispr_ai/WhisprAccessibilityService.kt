@@ -99,16 +99,17 @@ class WhisprAccessibilityService : AccessibilityService() {
 
         // 2. Check if a text input field has focus
         val focusedNode = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        val eventSource = event?.source
         if (focusedNode != null && (focusedNode.isEditable ||
             focusedNode.className?.toString()?.contains("EditText", ignoreCase = true) == true)
         ) {
             isInputActive = true
             lastFocusedNode = focusedNode
-        } else if (event?.source != null && (event.source.isEditable ||
-            event.className?.toString()?.contains("EditText", ignoreCase = true) == true)
+        } else if (eventSource != null && (eventSource.isEditable ||
+            eventSource.className?.toString()?.contains("EditText", ignoreCase = true) == true)
         ) {
             isInputActive = true
-            lastFocusedNode = event.source
+            lastFocusedNode = eventSource
         }
 
         FloatingDictationService.onInputActivityChanged(isInputActive)

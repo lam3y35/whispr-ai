@@ -23,7 +23,8 @@ const Set<String> _enAuxiliaries = {
 };
 
 const Set<String> _arQuestionStarters = {
-  'هل', 'ماذا', 'ما', 'كيف', 'متى', 'أين', 'لماذا', 'كم', 'من', 'أي', 'أ'
+  'هل', 'ماذا', 'ما', 'كيف', 'متى', 'أين', 'لماذا', 'كم', 'من', 'أي', 'أ',
+  'ازاي', 'ليه', 'فين', 'إيه', 'ايه', 'مين', 'كام', 'شو', 'وين', 'علاش', 'شلون', 'شنو', 'ايش'
 };
 
 /// Returns true if the string predominantly contains Arabic characters.
@@ -133,6 +134,10 @@ String _correctArabic(String text) {
       .replaceAll(',', '،')
       .replaceAll(';', '؛')
       .replaceAll('?', '؟');
+
+  // 1. Remove stray dots between words (system speech recognizers fragment Arabic phrases with dots)
+  t = t.replaceAll(RegExp(r'(?<=[\p{L}\p{N}])\s*\.\s*(?=[\p{L}\p{N}])', unicode: true), ' ');
+  t = t.replaceAll(RegExp(r'\.{2,}'), ' ');
 
   t = t.replaceAllMapped(_arSpacesPunct, (m) => m.group(1)!);
   t = t.replaceAllMapped(_arPunctSpacing, (m) => '${m.group(1)} ');
