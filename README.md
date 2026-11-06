@@ -16,19 +16,18 @@ no build needed:
 
 | File | For |
 |---|---|
-| `WhisprAI.exe` | Windows 10/11 — run it, hold **Right Ctrl**, talk |
-| `app-release.apk` | Android 7+ — sideload, then enable the Whispr AI keyboard |
+| `WhisprAI.exe` | Windows 10/11 — run it, touch **Control**, talk in English or Arabic |
+| `app-release.apk` | Android 7+ — sideload, then enable the Whispr AI bilingual keyboard |
 
 Every tag (`v*`) is built by `.github/workflows/release.yml` behind the same
 test gates as CI, and the binaries land on a permanent public Release.
 Regular CI runs on every push also upload the same artifacts (90-day retention,
-login required). The first dictation on Windows needs the ~660 MB Parakeet
-model — see [docs/USAGE.md](docs/USAGE.md) for the one-time setup.
+login required). See [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md) for the guide and setup.
 
 | Platform | What it is | Status |
 |---|---|---|
-| **Android** (`lib/`, `android/`) | A dictation **keyboard** (IME) + companion app: history, dictionary editor, in-app dictation. Works in any app's text field. | 24/24 tests pass, including all 19 shared dictionary contract vectors |
-| **Windows** (`windows/`) | Desktop push-to-talk (hold **Right Ctrl**, talk, release; text types into the focused app), rebranded Whispr AI with Parakeet on-device ASR. | 63/63 tests pass; CI builds + self-tests the exe |
+| **Android** (`lib/`, `android/`) | A bilingual dictation **keyboard** (IME) + companion app: history, dictionary editor, in-app dictation with one-tap English/Arabic toggle and grammar correction. Works in any app's text field. | Passes all tests including shared dictionary contract vectors |
+| **Windows** (`windows/`) | Desktop push-to-talk (touch or hold **Control**, speak English or Arabic, text types into the focused app with grammar corrected), powered by fast Whisper ONNX or Parakeet on-device ASR. | Passes all unit and self-tests; CI builds and verifies the exe |
 
 CI: `.github/workflows/android.yml` builds the APK; `.github/workflows/windows.yml`
 builds and smoke-tests the exe (via its `--selftest` mode) on every push. Both

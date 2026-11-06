@@ -22,6 +22,8 @@ public sealed class SettingsWindow : Window
     /// </remarks>
     private static readonly (int Key, string Label, string? Warning)[] Keys =
     [
+        (0x11, "ANY CTRL", null),
+        (0xA2, "LEFT CTRL", null),
         (0xA3, "RIGHT CTRL", null),
         (0xA1, "RIGHT SHIFT", null),
         (0x14, "CAPS LOCK", null),
@@ -88,8 +90,8 @@ public sealed class SettingsWindow : Window
                 {
                     _keyRow,
                     _keyWarning,
-                    Note("Hold this key anywhere to dictate. The key is passed through to the "
-                       + "focused app rather than swallowed, so it never gets stuck down."),
+                    Note("Touch or hold this key anywhere to dictate. In Smart mode, touching (tapping) the "
+                       + "Control key starts recording; touching it again stops and transcribes."),
                 },
             }),
 
@@ -100,6 +102,8 @@ public sealed class SettingsWindow : Window
                 Spacing = Tokens.Space.Snug,
                 Children =
                 {
+                    Toggle("Correct grammar, format punctuation & clean fillers", _settings.Data.EnableGrammarCorrection,
+                        v => Save(_settings.Data with { EnableGrammarCorrection = v })),
                     Toggle("Type transcripts into the focused app", _settings.Data.InjectText,
                         v => Save(_settings.Data with { InjectText = v })),
                     Toggle("Keep a transcript history", _settings.Data.KeepHistory,
@@ -111,7 +115,7 @@ public sealed class SettingsWindow : Window
 
     private static StackPanel BuildModelSection()
     {
-        var located = ParakeetTranscriber.Locate();
+        var located = SpeechModelLocator.Locate();
         var found = located is not null;
 
         var status = new StackPanel
@@ -128,7 +132,7 @@ public sealed class SettingsWindow : Window
                 },
                 new TextBlock
                 {
-                    Text = found ? "Parakeet ready" : "Model not installed",
+                    Text = found ? $"{located!.Value.Kind} ready" : "Model not installed",
                     FontFamily = Tokens.Fonts.Grotesque,
                     FontSize = Tokens.Fonts.Body,
                     Foreground = Tokens.Brushes.Ink,
@@ -138,13 +142,10 @@ public sealed class SettingsWindow : Window
         };
 
         var detail = found
-            // Showing the resolved path matters: "model not found" is unactionable without
-            // knowing which directory was actually checked.
-            ? Note($"Loaded from {located}")
-            : Note("Windows has no built-in speech engine equivalent to Apple's, so Whispr AI "
-                 + "cannot transcribe until the Parakeet model is downloaded (~661 MB). "
-                 + "See docs/PARAKEET-WINDOWS.md. Expected in:\n"
-                 + string.Join("\n", ParakeetTranscriber.DefaultSearchPaths()));
+            ? Note($"Loaded from {located!.Value.Directory}")
+            : Note("Download the fast, lightweight Whisper model (~39 MB) for bilingual English & "
+                 + "Arabic dictation, or Parakeet (~660 MB for English). See docs/USAGE.md. Expected in:\n"
+                 + string.Join("\n", SpeechModelLocator.DefaultSearchPaths().Take(4)));
 
         return new StackPanel { Spacing = Tokens.Space.Snug, Children = { status, detail } };
     }

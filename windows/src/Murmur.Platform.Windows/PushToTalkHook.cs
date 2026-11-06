@@ -7,7 +7,17 @@ namespace Murmur.Platform.Windows;
 public enum PushToTalkKey
 {
     /// <summary>
-    /// Right Ctrl — <b>the default, and the right one.</b>
+    /// Any Control key (Left or Right Ctrl) — <b>touching any Control button triggers dictation.</b>
+    /// </summary>
+    Control = 0x11,
+
+    /// <summary>
+    /// Left Ctrl — standard primary Control key on all keyboards and laptops.
+    /// </summary>
+    LeftControl = 0xA2,
+
+    /// <summary>
+    /// Right Ctrl — the default on full-size keyboards.
     /// </summary>
     /// <remarks>
     /// Right Ctrl produces no character on any keyboard layout, so holding it is always safe.
@@ -272,7 +282,7 @@ public sealed class PushToTalkHook : IHotkeySource
         var isUp = message is WM_KEYUP or WM_SYSKEYUP;
         if (!isDown && !isUp) return;
 
-        if (Normalize(e) != (int)Key) return;
+        if (!MatchesKey(Normalize(e))) return;
 
         if (isDown)
         {
@@ -321,6 +331,12 @@ public sealed class PushToTalkHook : IHotkeySource
             _ => key,
         };
     }
+
+    private bool MatchesKey(int normalizedKey) => Key switch
+    {
+        PushToTalkKey.Control => normalizedKey is VK_CONTROL or VK_LCONTROL or VK_RCONTROL,
+        _ => normalizedKey == (int)Key,
+    };
 
     /// <inheritdoc />
     public void Dispose() => StopListening();

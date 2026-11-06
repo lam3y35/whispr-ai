@@ -53,7 +53,7 @@ public sealed class Composition : IAsyncDisposable
     public bool IsPlatformAvailable { get; }
 
     /// <summary>Whether the speech model is present on disk.</summary>
-    public static bool IsModelInstalled => ParakeetTranscriber.Locate() is not null;
+    public static bool IsModelInstalled => SpeechModelLocator.Locate() is not null;
 
     /// <summary>Builds the object graph.</summary>
     public static Composition Create()
@@ -71,15 +71,14 @@ public sealed class Composition : IAsyncDisposable
 
         if (available)
         {
-            var modelDirectory = settings.Data.ModelDirectory ?? ParakeetTranscriber.Locate();
-
-            ITranscriber transcriber = modelDirectory is not null
-                ? new ParakeetTranscriber(modelDirectory)
-                : new UnavailableTranscriber();
+            var transcriber = SpeechModelLocator.Create(settings.Data.ModelDirectory, settings.Data.Language);
 
             engine = new DictationEngine(
                 capture!, hotkey!, transcriber, injector!,
-                () => dictionary.Entries);
+                () => dictionary.Entries,
+                clock: null,
+                grammarCorrector: BilingualGrammarCorrector.Instance,
+                settings: () => settings.Data);
 
             engine.Completed += (_, result) =>
             {

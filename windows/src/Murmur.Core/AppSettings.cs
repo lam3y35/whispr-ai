@@ -3,18 +3,52 @@ using System.Text.Json.Serialization;
 
 namespace Murmur.Core;
 
+/// <summary>How the hotkey triggers recording.</summary>
+public enum PushToTalkMode
+{
+    /// <summary>
+    /// Smart dual mode: touching (quick tap &lt; 350ms) toggles recording ON until tapped again.
+    /// Holding (&gt; 350ms) acts as hold-to-talk (records while held, stops on release).
+    /// </summary>
+    Smart,
+
+    /// <summary>
+    /// Touching the control button once starts recording; touching it again stops and transcribes.
+    /// </summary>
+    TapToToggle,
+
+    /// <summary>
+    /// Hold the key while speaking, release to stop.
+    /// </summary>
+    HoldToTalk,
+}
+
 /// <summary>User preferences.</summary>
 public sealed record SettingsData
 {
     /// <summary>
-    /// Virtual-key code of the push-to-talk key. Defaults to Right Ctrl (0xA3).
+    /// Virtual-key code of the push-to-talk key.
+    /// Defaults to Any Control (0x11) so touching either Control button starts recording.
     /// </summary>
-    /// <remarks>
-    /// <b>Not Right Alt.</b> On German, Polish, UK, Nordic and most Latin-American layouts
-    /// Right Alt is AltGr — it is how those users type <c>@</c>, <c>€</c>, <c>\</c> and
-    /// <c>|</c>. Right Ctrl produces no character on any layout.
-    /// </remarks>
-    public int PushToTalkKey { get; init; } = 0xA3;
+    public int PushToTalkKey { get; init; } = 0x11;
+
+    /// <summary>Trigger mode: Smart (tap or hold), TapToToggle, or HoldToTalk.</summary>
+    public PushToTalkMode PushToTalkMode { get; init; } = PushToTalkMode.Smart;
+
+    /// <summary>Speech language: "auto" (bilingual auto-detect), "en", or "ar".</summary>
+    public string Language { get; init; } = "auto";
+
+    /// <summary>Whether to automatically correct grammar, format punctuation, and clean fillers.</summary>
+    public bool EnableGrammarCorrection { get; init; } = true;
+
+    /// <summary>Optional AI grammar endpoint (e.g. Ollama, Groq, or OpenAI-compatible URL).</summary>
+    public string? AiGrammarEndpoint { get; init; }
+
+    /// <summary>Optional API key for the AI grammar service.</summary>
+    public string? AiGrammarApiKey { get; init; }
+
+    /// <summary>Optional model name for the AI grammar service (e.g. llama3.2:1b, qwen2.5:1.5b).</summary>
+    public string? AiGrammarModel { get; init; }
 
     /// <summary>Where the speech model lives, or null to search the default locations.</summary>
     public string? ModelDirectory { get; init; }
@@ -81,4 +115,5 @@ public sealed class AppSettings
 /// <summary>Source-generated JSON for settings.</summary>
 [JsonSourceGenerationOptions(WriteIndented = true)]
 [JsonSerializable(typeof(SettingsData))]
+[JsonSerializable(typeof(PushToTalkMode))]
 public sealed partial class SettingsJsonContext : JsonSerializerContext;

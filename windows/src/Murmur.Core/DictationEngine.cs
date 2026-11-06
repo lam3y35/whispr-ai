@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Diagnostics;
 using Murmur.Abstractions;
 using Murmur.Dictionary;
 
@@ -48,6 +49,10 @@ public sealed class DictationEngine : IAsyncDisposable
     private readonly ITextInjector _injector;
     private readonly IClock _clock;
     private readonly Func<IReadOnlyList<DictionaryEntry>> _dictionary;
+    private readonly Func<SettingsData>? _getSettings;
+    private readonly BilingualGrammarCorrector? _grammarCorrector;
+    private long _keyDownTimestamp;
+    private volatile bool _isToggledRecording;
 
     private readonly SemaphoreSlim _gate = new(1, 1);
     private CancellationTokenSource? _recording;
@@ -82,13 +87,17 @@ public sealed class DictationEngine : IAsyncDisposable
     /// a restart.
     /// </param>
     /// <param name="clock">Time source; defaults to the system clock.</param>
+    /// <param name="grammarCorrector">Grammar corrector; defaults to bilingual engine.</param>
+    /// <param name="settings">Settings supplier.</param>
     public DictationEngine(
         IAudioCapture capture,
         IHotkeySource hotkey,
         ITranscriber transcriber,
         ITextInjector injector,
         Func<IReadOnlyList<DictionaryEntry>> dictionary,
-        IClock? clock = null)
+        IClock? clock = null,
+        BilingualGrammarCorrector? grammarCorrector = null,
+        Func<SettingsData>? settings = null)
     {
         _capture = capture;
         _hotkey = hotkey;
@@ -96,6 +105,8 @@ public sealed class DictationEngine : IAsyncDisposable
         _injector = injector;
         _dictionary = dictionary;
         _clock = clock ?? SystemClock.Instance;
+        _grammarCorrector = grammarCorrector;
+        _getSettings = settings;
 
         _hotkey.Pressed += OnPressed;
         _hotkey.Released += OnReleased;
@@ -119,13 +130,71 @@ public sealed class DictationEngine : IAsyncDisposable
     /// </remarks>
     public void TogglePushToTalk()
     {
+        _isToggledRecording = false;
         if (State == DictationState.Idle) RunSafe(BeginAsync);
         else if (State == DictationState.Recording) RunSafe(EndAsync);
     }
 
-    private void OnPressed(object? sender, EventArgs e) => RunSafe(BeginAsync);
+    private void OnPressed(object? sender, EventArgs e)
+    {
+        _keyDownTimestamp = Stopwatch.GetTimestamp();
 
-    private void OnReleased(object? sender, EventArgs e) => RunSafe(EndAsync);
+        var mode = _getSettings?.Invoke().PushToTalkMode ?? PushToTalkMode.HoldToTalk;
+        if (mode == PushToTalkMode.TapToToggle)
+        {
+            TogglePushToTalk();
+            return;
+        }
+
+        if (mode == PushToTalkMode.Smart)
+        {
+            if (_isToggledRecording && State == DictationState.Recording)
+            {
+                // Second touch stops recording!
+                _isToggledRecording = false;
+                RunSafe(EndAsync);
+                return;
+            }
+
+            if (State == DictationState.Idle)
+            {
+                RunSafe(BeginAsync);
+            }
+            return;
+        }
+
+        // HoldToTalk
+        RunSafe(BeginAsync);
+    }
+
+    private void OnReleased(object? sender, EventArgs e)
+    {
+        var mode = _getSettings?.Invoke().PushToTalkMode ?? PushToTalkMode.HoldToTalk;
+        if (mode == PushToTalkMode.TapToToggle)
+        {
+            // Ignored on key up: toggle is controlled by key press
+            return;
+        }
+
+        if (mode == PushToTalkMode.Smart)
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(_keyDownTimestamp).TotalMilliseconds;
+            if (elapsedMs < 350)
+            {
+                // Quick touch: keep recording until the next touch
+                _isToggledRecording = true;
+                return;
+            }
+
+            // Held for > 350ms: classic push-to-talk release
+            _isToggledRecording = false;
+            RunSafe(EndAsync);
+            return;
+        }
+
+        // HoldToTalk
+        RunSafe(EndAsync);
+    }
 
     /// <summary>
     /// Fire-and-forget with a witness.
@@ -308,9 +377,13 @@ public sealed class DictationEngine : IAsyncDisposable
             return;
         }
 
-        // The dictionary runs last and unconditionally. Biasing only raises the odds of the
-        // right word; this is the pass that guarantees it.
-        var (corrected, applied) = new DictionaryCorrector(entries).Apply(raw);
+        // The dictionary runs first for deterministic user terms and phrases.
+        var (dictText, applied) = new DictionaryCorrector(entries).Apply(raw);
+
+        // Bilingual grammar correction: removes fillers, duplicate words, formats punctuation for English & Arabic.
+        var enableGrammar = _getSettings?.Invoke().EnableGrammarCorrection ?? (_grammarCorrector is not null);
+        var corrector = _grammarCorrector ?? (_getSettings is not null ? BilingualGrammarCorrector.Instance : null);
+        var corrected = (enableGrammar && corrector is not null) ? corrector.Correct(dictText) : dictText;
 
         var result = new DictationResult(
             At: releasedAt,

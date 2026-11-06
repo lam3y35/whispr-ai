@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'dictionary.dart';
+import 'grammar.dart';
 
 void main() => runApp(const WhisprAiApp());
 
@@ -107,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _lastText;
   bool _recording = false;
   double _level = 0;
+  String _language = 'auto';
 
   @override
   void initState() {
@@ -119,6 +121,11 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     });
     _loadLast();
+    if (_isAndroid) {
+      bridge.invokeMethod('getLanguage').then((val) {
+        if (val is String && mounted) setState(() => _language = val);
+      }).catchError((_) {});
+    }
   }
 
   Future<void> _loadLast() async {
@@ -129,13 +136,20 @@ class _HomeScreenState extends State<HomeScreen> {
     if (e != null && mounted) setState(() => _lastText = e.text);
   }
 
+  Future<void> _setLanguage(String lang) async {
+    setState(() => _language = lang);
+    if (_isAndroid) {
+      await bridge.invokeMethod('setLanguage', {'language': lang});
+    }
+  }
+
   Future<void> _record() async {
     if (_recording) return;
     if (!_isAndroid) {
       // No native handler on desktop: invoking the channel would throw
       // MissingPluginException. The desktop app is WhisprAI.exe.
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Dictation runs on Android. On Windows use WhisprAI.exe (hold Right Ctrl).')));
+          content: Text('Dictation runs on Android. On Windows touch the Control key.')));
       return;
     }
     setState(() => _recording = true);
@@ -189,8 +203,31 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const _Label('PUSH-TO-TALK DICTATION \u00b7 ON-DEVICE'),
-            const SizedBox(height: 24),
+            const _Label('BILINGUAL DICTATION \u00b7 ENGLISH & ARABIC'),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LangChip(
+                  label: 'AUTO',
+                  selected: _language == 'auto',
+                  onTap: () => _setLanguage('auto'),
+                ),
+                const SizedBox(width: 8),
+                _LangChip(
+                  label: 'ENGLISH',
+                  selected: _language == 'en',
+                  onTap: () => _setLanguage('en'),
+                ),
+                const SizedBox(width: 8),
+                _LangChip(
+                  label: 'العربية',
+                  selected: _language == 'ar',
+                  onTap: () => _setLanguage('ar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
             _RecordButton(recording: _recording, level: _level, onTap: _record),
             const SizedBox(height: 24),
             Container(
@@ -203,6 +240,7 @@ class _HomeScreenState extends State<HomeScreen> {
               constraints: const BoxConstraints(minHeight: 96),
               child: Text(
                 _lastText ?? 'Your last dictation will appear here.',
+                textDirection: isArabic(_lastText ?? '') ? TextDirection.rtl : TextDirection.ltr,
                 style: const TextStyle(color: Tokens.ink, fontSize: 16, height: 1.4),
               ),
             ),
@@ -290,6 +328,37 @@ class _Label extends StatelessWidget {
   Widget build(BuildContext context) => Text(text.toUpperCase(),
       style: const TextStyle(
           color: Tokens.muted, fontSize: 11, letterSpacing: 2.5, fontWeight: FontWeight.w600));
+}
+
+class _LangChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _LangChip({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Tokens.panelEdge : Tokens.panel,
+          border: Border.all(color: selected ? Tokens.amber : Tokens.panelEdge),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Tokens.amber : Tokens.muted,
+            fontSize: 12,
+            fontWeight: selected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class HistoryScreen extends StatefulWidget {

@@ -25,30 +25,31 @@ You have two apps in this folder:
 
 ### The push-to-talk key
 
-- **Hold `Right Ctrl`** (the right-hand Ctrl key) and start speaking.
-- **Release the key** — the recording stops and the text is typed into
-  whatever text field your cursor was in (your editor, browser, chat window,
-  anywhere).
-- Right Ctrl is chosen because it types no character on any keyboard layout,
-  so holding it can never interfere with normal typing.
-- You can change the key later in **Settings** (Right Shift or Right Alt).
+- **Touch `Ctrl` (or hold it)**:
+  - **Touch (tap) the Control key** (Left Ctrl or Right Ctrl) to start recording immediately.
+  - Speak in English or Arabic.
+  - **Touch the Control key again** — recording stops, grammar is cleaned up, and the text is typed right at your cursor.
+  - Or simply **hold `Ctrl`** while speaking and let go when you are done (Smart Dual Mode).
+- Control is the default because it types no character on any layout.
+- You can change the key anytime in **Settings** (Any Ctrl, Left Ctrl, Right Ctrl, Right Shift, etc.).
 
 ### Before your first dictation (one-time setup)
 
-1. **The speech model.** Windows has no built-in speech engine, so Whispr AI
-   uses NVIDIA's Parakeet model. On this machine it is **already installed**
-   at `%LOCALAPPDATA%\WhisprAI\models\parakeet-v2\`. If you ever see
-   "Speech model not installed", open Settings → Model to see the exact
-   folder it expects.
+1. **The speech model.** Whispr AI supports fast bilingual **Whisper INT8 (~39 MB)** for English & Arabic, as well as Parakeet.
+   Download the 3 files into `%LOCALAPPDATA%\WhisprAI\models\whisper-tiny\`:
+   - `tiny-encoder.int8.onnx`
+   - `tiny-decoder.int8.onnx`
+   - `tiny-tokens.txt`
+   See [docs/HOW_TO_USE.md](HOW_TO_USE.md) for full setup instructions.
 2. **Microphone permission.** Windows Settings → Privacy & security →
    Microphone → make sure *Let desktop apps access your microphone* is On.
    If it is off, the app hears silence — not an error.
 
 ### Using it day to day
 
-- Click into any text field (Notepad, VS Code, WhatsApp Web — anything).
-- Hold **Right Ctrl**, speak normally, let go.
-- The text appears with punctuation, capitalization and spacing cleaned up.
+- Click into any text field (Notepad, VS Code, WhatsApp, Word — anything).
+- Touch **Control**, speak normally in English or Arabic, touch **Control** again.
+- The text appears with punctuation, capitalization, filler words removed, and grammar cleaned up.
 - Your dictations are saved locally: the main window's **Transcriptions**
   tab shows a searchable history with a copy button on each entry.
 

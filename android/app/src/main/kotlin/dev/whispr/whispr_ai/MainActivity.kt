@@ -71,6 +71,18 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                         result.success(null)
                     }
 
+                    "getLanguage" -> {
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        result.success(prefs.getString("language", "auto") ?: "auto")
+                    }
+
+                    "setLanguage" -> {
+                        val lang = call.argument<String>("language") ?: "auto"
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        prefs.edit().putString("language", lang).apply()
+                        result.success(null)
+                    }
+
                     "startDictation" -> startDictation(result)
 
                     "openImeSettings" -> {
@@ -109,11 +121,22 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         }
         recognizer?.setRecognitionListener(this)
         recognizerResult = result
+
+        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+        val lang = prefs.getString("language", "auto") ?: "auto"
+
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            if (lang == "ar") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-SA", "ar-EG", "ar-AE", "ar"))
+            } else if (lang == "en") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
+            }
         }
         recognizer?.startListening(intent)
     }
@@ -129,8 +152,10 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         if (raw.isEmpty()) {
             recognizerResult?.success(mapOf("error" to "no_speech"))
         } else {
-            val cleaned = raw.trim().replace(Regex("\\s+"), " ")
-            val (corrected, applied) = DictionaryCorrector.apply(cleaned, rules)
+            val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
+            val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+            val lang = prefs.getString("language", "auto") ?: "auto"
+            val corrected = BilingualGrammarCorrector.correct(dictCorrected, lang)
             DictionaryStore.appendTranscript(this, corrected, applied)
             recognizerResult?.success(
                 mapOf(

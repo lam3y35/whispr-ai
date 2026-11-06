@@ -115,9 +115,11 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
     private var listening = false
     private var finalText = ""
     private var rules: List<DictionaryCorrector.Rule> = emptyList()
+    private var language: String = "auto"
 
     private lateinit var root: LinearLayout
     private lateinit var micButton: Button
+    private lateinit var langButton: Button
     private lateinit var insertButton: Button
     private lateinit var statusText: TextView
     private lateinit var previewText: TextView
@@ -133,6 +135,8 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
 
     override fun onCreateInputView(): View {
         rules = DictionaryStore.rules(this)
+        val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
+        language = prefs.getString("language", "auto") ?: "auto"
 
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -155,14 +159,43 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             setOnClickListener { toggleListening() }
         }
 
+        langButton = Button(this).apply {
+            text = when (language) {
+                "ar" -> "عربي"
+                "en" -> "EN"
+                else -> "AUTO"
+            }
+            setBackgroundColor(panel)
+            setTextColor(amber)
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            setOnClickListener {
+                language = when (language) {
+                    "en" -> "ar"
+                    "ar" -> "auto"
+                    else -> "en"
+                }
+                prefs.edit().putString("language", language).apply()
+                text = when (language) {
+                    "ar" -> "عربي"
+                    "en" -> "EN"
+                    else -> "AUTO"
+                }
+                Toast.makeText(this@ImeDictationService, "Language: $text", Toast.LENGTH_SHORT).show()
+            }
+        }
+
         statusText = TextView(this).apply {
-            text = "on-device \u00b7 offline-first"
+            text = "on-device \u00b7 bilingual"
             setTextColor(muted)
             textSize = 12f
-            setPadding(24, 0, 0, 0)
+            setPadding(16, 0, 0, 0)
         }
 
         topRow.addView(micButton)
+        topRow.addView(langButton, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+            setMargins(12, 0, 0, 0)
+        })
         topRow.addView(statusText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
 
         previewText = TextView(this).apply {
@@ -254,6 +287,13 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
+            if (language == "ar") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-SA", "ar-EG", "ar-AE", "ar"))
+            } else if (language == "en") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
+            }
         }
         listening = true
         micButton.text = "\u25CF  LISTENING \u2014 TAP TO STOP"
@@ -281,16 +321,7 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         listening = false
         micButton.text = "\u25CF  TAP TO DICTATE"
         micButton.setBackgroundColor(recRed)
-        statusText.text = "on-device \u00b7 offline-first"
-    }
-
-    private fun cleanup(raw: String): String {
-        var t = raw.trim().replace(Regex("\\s+"), " ")
-        if (t.isEmpty()) return t
-        t = t.replaceFirstChar { it.uppercase(Locale.getDefault()) }
-        val last = t.last()
-        if (last.isLetterOrDigit()) t += "."
-        return t
+        statusText.text = "on-device \u00b7 bilingual"
     }
 
     // ---- RecognitionListener ----
@@ -298,7 +329,15 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
     override fun onPartialResults(partialResults: Bundle?) {
         val list = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?: return
-        if (list.isNotEmpty()) previewText.text = list[0]
+        if (list.isNotEmpty()) {
+            val partial = list[0]
+            previewText.text = partial
+            if (BilingualGrammarCorrector.isArabic(partial)) {
+                previewText.textDirection = View.TEXT_DIRECTION_RTL
+            } else {
+                previewText.textDirection = View.TEXT_DIRECTION_LTR
+            }
+        }
     }
 
     override fun onResults(results: Bundle?) {
@@ -309,14 +348,19 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             setIdleUi()
             return
         }
-        val cleaned = cleanup(raw)
-        val (corrected, applied) = DictionaryCorrector.apply(cleaned, rules)
-        finalText = corrected
-        previewText.text = corrected
+        val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
+        val cleaned = BilingualGrammarCorrector.correct(dictCorrected, language)
+        finalText = cleaned
+        previewText.text = cleaned
+        if (BilingualGrammarCorrector.isArabic(cleaned)) {
+            previewText.textDirection = View.TEXT_DIRECTION_RTL
+        } else {
+            previewText.textDirection = View.TEXT_DIRECTION_LTR
+        }
         insertButton.isEnabled = true
         statusText.text = if (applied.isEmpty()) "ready \u00b7 tap Insert"
         else "ready \u00b7 ${applied.sumOf { it.count }} correction(s) applied"
-        DictionaryStore.appendTranscript(this, corrected, applied)
+        DictionaryStore.appendTranscript(this, cleaned, applied)
         setIdleUi()
     }
 
