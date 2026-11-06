@@ -76,7 +76,8 @@ whispr_ai/
 ├── shared/                  # dictionary-test-vectors.json — the contract
 ├── tool/make_icons.py       # regenerates every icon from one drawing
 ├── assets/icon-512.png      # repo/store artwork
-└── docs/USAGE.md            # full user guide (install, hotkeys, phone transfer)
+├── docs/HOW_TO_USE.md       # full user guide (install, hotkeys, phone transfer)
+└── docs/WHISPERFLOW_GUIDE.md # WhisperFlow model & GPU/CPU/Mobile RAM guide
 ```
 
 ## Build
