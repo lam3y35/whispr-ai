@@ -112,6 +112,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _modelPreference = 'default';
   String? _deviceSummary;
   bool _floatingButtonActive = false;
+  bool _accessibilityEnabled = false;
+  bool _smartMode = true;
 
   @override
   void initState() {
@@ -150,10 +152,40 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_isAndroid) return;
     try {
       final running = await bridge.invokeMethod<bool>('isFloatingButtonRunning');
-      if (running != null && mounted) {
-        setState(() => _floatingButtonActive = running);
+      final acc = await bridge.invokeMethod<bool>('isAccessibilityServiceEnabled');
+      final smart = await bridge.invokeMethod<bool>('isSmartMode');
+      if (mounted) {
+        setState(() {
+          if (running != null) _floatingButtonActive = running;
+          if (acc != null) _accessibilityEnabled = acc;
+          if (smart != null) _smartMode = smart;
+        });
       }
     } catch (_) {}
+  }
+
+  Future<void> _toggleSmartMode(bool val) async {
+    if (!_isAndroid) return;
+    await bridge.invokeMethod('setSmartMode', {'enabled': val});
+    if (mounted) setState(() => _smartMode = val);
+    if (val && !_accessibilityEnabled) {
+      _openAccessibilitySettings();
+    }
+  }
+
+  Future<void> _openAccessibilitySettings() async {
+    if (!_isAndroid) return;
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'In Accessibility, turn ON "Whispr AI Smart Dictation" so the button appears only when writing.\nفي إمكانية الوصول، فعّل Whispr AI ليظهر الزر تلقائياً فقط عند الكتابة.',
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
+    await bridge.invokeMethod('openAccessibilitySettings');
   }
 
   Future<void> _toggleFloatingButton(bool enable) async {
@@ -416,7 +448,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 _floatingButtonActive
-                                    ? 'Active \u00b7 Floats over all apps (نشط فوق كل التطبيقات)'
+                                    ? (_smartMode && _accessibilityEnabled
+                                        ? 'Smart Mode Active \u00b7 Appears when writing'
+                                        : 'Active \u00b7 Floats over all apps')
                                     : 'Inactive \u00b7 Toggle to enable overlay',
                                 style: TextStyle(
                                   color: _floatingButtonActive
@@ -435,12 +469,76 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.touch_app, size: 18, color: Tokens.amber),
+                              const SizedBox(width: 8),
+                              const Expanded(
+                                child: Text(
+                                  'Only appear when writing (فقط عند الكتابة)',
+                                  style: TextStyle(
+                                    color: Tokens.ink,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              Switch(
+                                value: _smartMode,
+                                activeThumbColor: Tokens.amber,
+                                onChanged: _toggleSmartMode,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _smartMode
+                                ? (_accessibilityEnabled
+                                    ? '✓ Active: Button only appears when you click a text field or open keyboard, and auto-types your words!\n✓ مفعّل: يظهر الزر فقط عند الضغط على مكان الكتابة وظهور الكيبورد، ويكتب النص تلقائياً!'
+                                    : '\u26a0 Requires Accessibility to detect when you click to write.\nاضغط الزر بالأسفل لتفعيل إمكانية الوصول ليظهر فقط عند الكتابة.')
+                                : 'Button stays visible on screen continuously.',
+                            style: TextStyle(
+                              color: _smartMode
+                                  ? (_accessibilityEnabled ? Colors.greenAccent : Tokens.amber)
+                                  : Tokens.muted,
+                              fontSize: 11,
+                              height: 1.4,
+                            ),
+                          ),
+                          if (_smartMode && !_accessibilityEnabled) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Tokens.amber,
+                                side: const BorderSide(color: Tokens.amber),
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              icon: const Icon(Icons.accessibility_new, size: 16),
+                              label: const Text(
+                                'Enable in Accessibility Settings (تفعيل إمكانية الوصول)',
+                                style: TextStyle(fontSize: 11),
+                              ),
+                              onPressed: _openAccessibilitySettings,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: 10),
                     const Text(
-                      '\u2022 Floats over WhatsApp, Telegram, Notes, Chrome, or any app.\n'
                       '\u2022 Tap \ud83c\udf99\ufe0f to speak \u2014 words appear live as you talk!\n'
-                      '\u2022 Fixes grammar & auto-copies clean text to clipboard.\n'
-                      '\u2022 زر عائم يظهر فوق التطبيقات، اضغط وتحدث لتنسخ النص المصحح فوراً.',
+                      '\u2022 Auto-fixes grammar & types directly into the text field.\n'
+                      '\u2022 زر عائم يظهر عند الكتابة فقط ويصحح القواعد ويكتب تلقائياً.',
                       style: TextStyle(color: Tokens.muted, fontSize: 11, height: 1.45),
                     ),
                   ],

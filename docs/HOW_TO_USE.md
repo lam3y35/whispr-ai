@@ -112,17 +112,20 @@ On the Whispr AI Keyboard and in the app:
   - **`عربي`**: Forces Arabic speech recognition.
   - **`AUTO`**: Detects automatically based on your voice.
 
-### The Flying Dictation Button (الزر العائم — الكتابة بالصوت فوق أي تطبيق)
+### The Flying Dictation Button (الزر العائم — يظهر فقط عند الكتابة فوق أي تطبيق)
 If you prefer not to switch keyboards, you can use the **Flying / Floating Button**:
 1. Open the **Whispr AI** app.
 2. Under **FLYING BUTTON · الزر العائم**, toggle the switch to **ON**.
-3. When prompted, allow the **"Display over other apps" (الظهور فوق التطبيقات الأخرى)** permission.
-4. A floating, draggable circular microphone button (`🎙️`) will appear on your screen over any app (WhatsApp, Telegram, Notes, Chrome, etc.).
+3. Allow the **"Display over other apps" (الظهور فوق التطبيقات الأخرى)** permission.
+4. **Smart Auto-Appear (الظهور فقط عند الكتابة)**:
+   - Under the flying button card, toggle **"Only appear when writing (فقط عند الكتابة)"** to ON.
+   - Tap **"Enable in Accessibility Settings"** and turn ON **Whispr AI Smart Dictation**.
+   - **Now the button only appears when you tap into a text field in WhatsApp, Telegram, Notes, or any app when the keyboard opens!**
+   - As soon as you finish or close the keyboard, the button automatically disappears so your screen stays completely clean!
 5. **How to dictate**:
    - Tap the `🎙️` button: it turns red (`⏹️`) and begins listening.
-   - Speak in Arabic or English: a floating preview bubble appears in real-time showing your words as you speak them!
-   - Tap again (or pause) to finish: Whispr AI instantly corrects grammar, removes stutters and filler words (*"يعني"*, *"um"*), and copies the polished text to your clipboard.
-   - Tap **Paste (لصق)** in your chat or text box!
+   - Speak in Arabic or English: words appear live in real-time in the floating preview bubble as you talk!
+   - Tap again (or pause) to finish: Whispr AI automatically corrects grammar, removes stutters and filler words (*"يعني"*, *"um"*), and **types the text directly into the text field** (and also copies to clipboard as backup).
 
 ### Using the Full Bilingual Keyboard (لوحة المفاتيح الكاملة)
 1. In the Whispr AI app, tap **"Enable Whispr Keyboard"** and enable it in Android Settings.

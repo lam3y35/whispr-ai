@@ -162,6 +162,31 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                         result.success(FloatingDictationService.isRunning)
                     }
 
+                    "isAccessibilityServiceEnabled" -> {
+                        val am = getSystemService(android.content.Context.ACCESSIBILITY_SERVICE) as? android.view.accessibility.AccessibilityManager
+                        val enabled = WhisprAccessibilityService.isRunning || (am?.getEnabledAccessibilityServiceList(android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)?.any {
+                            it.resolveInfo?.serviceInfo?.packageName == packageName
+                        } ?: false)
+                        result.success(enabled)
+                    }
+
+                    "openAccessibilitySettings" -> {
+                        startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                        result.success(null)
+                    }
+
+                    "isSmartMode" -> {
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        result.success(prefs.getBoolean("smart_flying_button", true))
+                    }
+
+                    "setSmartMode" -> {
+                        val enabled = call.argument<Boolean>("enabled") ?: true
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        prefs.edit().putBoolean("smart_flying_button", enabled).apply()
+                        result.success(null)
+                    }
+
                     else -> result.notImplemented()
                 }
             }

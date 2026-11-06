@@ -60,12 +60,25 @@ class FloatingDictationService : Service(), RecognitionListener {
     private val textHint = Color.parseColor("#9E9E9E")
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private var isSmartMode = true
 
     companion object {
         var isRunning = false
             private set
+        @Volatile
+        var instance: FloatingDictationService? = null
+            private set
+
         private const val NOTIF_CHANNEL_ID = "whispr_floating_service"
         private const val NOTIF_ID = 2001
+
+        /**
+         * Called by WhisprAccessibilityService when an editable text field is focused
+         * or when the soft keyboard appears / disappears.
+         */
+        fun onInputActivityChanged(active: Boolean) {
+            instance?.applyInputActivity(active)
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -75,15 +88,32 @@ class FloatingDictationService : Service(), RecognitionListener {
 
     override fun onCreate() {
         super.onCreate()
+        instance = this
         isRunning = true
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         rules = DictionaryStore.rules(this)
 
         val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
         language = prefs.getString("language", "auto") ?: "auto"
+        isSmartMode = prefs.getBoolean("smart_flying_button", true)
 
         startForegroundServiceNotification()
         createFloatingWidget()
+    }
+
+    fun applyInputActivity(active: Boolean) {
+        if (!isSmartMode) return
+        mainHandler.post {
+            if (active) {
+                if (::overlayView.isInitialized) {
+                    overlayView.visibility = View.VISIBLE
+                }
+            } else {
+                if (!isRecording && ::overlayView.isInitialized) {
+                    overlayView.visibility = View.GONE
+                }
+            }
+        }
     }
 
     private fun startForegroundServiceNotification() {
@@ -149,6 +179,7 @@ class FloatingDictationService : Service(), RecognitionListener {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(4), dp(4), dp(4), dp(4))
+            visibility = if (isSmartMode) View.GONE else View.VISIBLE
         }
 
         // Live transcript preview bubble (appears next to the floating button when speaking)
@@ -340,15 +371,24 @@ class FloatingDictationService : Service(), RecognitionListener {
         val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
         val cleaned = BilingualGrammarCorrector.correct(dictCorrected, language)
 
-        // Copy cleaned text to clipboard so user can immediately paste anywhere
+        // 1. Try direct typing into active input field first
+        val typedDirectly = WhisprAccessibilityService.insertText(cleaned)
+
+        // 2. Always copy cleaned text to clipboard as guaranteed fallback
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Whispr AI Dictation", cleaned))
 
         DictionaryStore.appendTranscript(this, cleaned, applied)
 
-        liveTranscriptBubble.text = "✓ Copied: $cleaned"
-        liveTranscriptBubble.setTextColor(Color.parseColor("#4CAF50"))
-        Toast.makeText(this, "✓ Dictated & Copied! Paste anywhere", Toast.LENGTH_SHORT).show()
+        if (typedDirectly) {
+            liveTranscriptBubble.text = "✓ Written: $cleaned"
+            liveTranscriptBubble.setTextColor(Color.parseColor("#4CAF50"))
+            Toast.makeText(this, "✓ Dictated & Written automatically!", Toast.LENGTH_SHORT).show()
+        } else {
+            liveTranscriptBubble.text = "✓ Copied: $cleaned"
+            liveTranscriptBubble.setTextColor(Color.parseColor("#4CAF50"))
+            Toast.makeText(this, "✓ Dictated & Copied! Paste anywhere", Toast.LENGTH_SHORT).show()
+        }
 
         resetIdleState()
     }
@@ -374,6 +414,9 @@ class FloatingDictationService : Service(), RecognitionListener {
 
     override fun onDestroy() {
         isRunning = false
+        if (instance == this) {
+            instance = null
+        }
         recognizer?.destroy()
         try {
             if (::overlayView.isInitialized) {
