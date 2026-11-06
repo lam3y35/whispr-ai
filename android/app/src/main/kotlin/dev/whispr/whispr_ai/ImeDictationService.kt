@@ -106,7 +106,7 @@ object DictionaryStore {
     }
 }
 
-enum class KeyboardMode { ENGLISH, ARABIC, SYMBOLS, SYMBOLS_EXT }
+enum class KeyboardMode { ENGLISH, ARABIC, SYMBOLS, SYMBOLS_EXT, EMOJI, CLIPBOARD }
 
 /**
  * Whispr AI full bilingual keyboard with integrated push-to-talk voice dictation,
@@ -254,9 +254,41 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
 
         langContainer.addView(langPillEn)
         langContainer.addView(langPillAr)
-        updateLanguagePills()
+        val emojiButton = TextView(this).apply {
+            text = "😊"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                currentMode = if (currentMode == KeyboardMode.EMOJI) {
+                    if (language == "ar") KeyboardMode.ARABIC else KeyboardMode.ENGLISH
+                } else {
+                    KeyboardMode.EMOJI
+                }
+                renderKeyboard()
+            }
+        }
+
+        val clipboardButton = TextView(this).apply {
+            text = "📋"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(4), dp(8), dp(4))
+            setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                currentMode = if (currentMode == KeyboardMode.CLIPBOARD) {
+                    if (language == "ar") KeyboardMode.ARABIC else KeyboardMode.ENGLISH
+                } else {
+                    KeyboardMode.CLIPBOARD
+                }
+                renderKeyboard()
+            }
+        }
 
         headerBar.addView(dictationButton)
+        headerBar.addView(emojiButton)
+        headerBar.addView(clipboardButton)
         headerBar.addView(statusText, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
         headerBar.addView(langContainer)
     }
@@ -292,6 +324,8 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             KeyboardMode.ARABIC -> buildArabicKeyboard()
             KeyboardMode.SYMBOLS -> buildSymbolsKeyboard()
             KeyboardMode.SYMBOLS_EXT -> buildSymbolsExtKeyboard()
+            KeyboardMode.EMOJI -> buildEmojiKeyboard()
+            KeyboardMode.CLIPBOARD -> buildClipboardKeyboard()
         }
     }
 
@@ -442,17 +476,20 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         keysContainer.addView(r5)
     }
 
-    // ---- Extended Symbols Layout ----
+    // ---- Extended Symbols Layout (Matches Screenshot 1) ----
     private fun buildSymbolsExtKeyboard() {
-        val row1 = listOf("~", "\\", "|", "^", "°", "§", "€", "£", "¥", "¢")
+        val row1 = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")
         keysContainer.addView(createRow(row1))
 
-        val row2 = listOf("<", ">", "[", "]", "{", "}", "=", "×", "÷", "±")
+        // Row 2: Currency & math symbols from Screenshot 1
+        val row2 = listOf("£", "€", "ج.م", " ", "√", "π", "÷", "×", "=", "|")
         keysContainer.addView(createRow(row2))
 
-        val row3 = listOf("★", "✓", "•", "°", "…", "¿", "¡", "_", "–", "—")
+        // Row 3: Brackets & arrows
+        val row3 = listOf("«", "^", "°", "{", "}", "[", "]", "<", ">", "\\")
         keysContainer.addView(createRow(row3))
 
+        // Row 4: Symbols & Backspace
         val r4 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -464,11 +501,12 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             currentMode = KeyboardMode.SYMBOLS
             renderKeyboard()
         })
-        val r4Chars = listOf("$", "%", "^", "&", "*", "+", "=")
+        val r4Chars = listOf("Δ", "©", "®", "™", "✓", "§", "¶")
         r4Chars.forEach { r4.addView(createCharKey(it, weight = 1.0f)) }
         r4.addView(createBackspaceKey(weight = 1.4f))
         keysContainer.addView(r4)
 
+        // Row 5: ABC / 123 / Space / Enter
         val r5 = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             layoutParams = LinearLayout.LayoutParams(
@@ -481,11 +519,131 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             currentMode = if (language == "ar") KeyboardMode.ARABIC else KeyboardMode.ENGLISH
             renderKeyboard()
         })
-        r5.addView(createCharKey(",", weight = 1.0f))
-        r5.addView(createSpaceKey("Space", weight = 4.2f))
-        r5.addView(createCharKey(".", weight = 1.0f))
+        r5.addView(createSpecialKey("123", weight = 1.0f, textColor = tealAccent) {
+            currentMode = KeyboardMode.SYMBOLS
+            renderKeyboard()
+        })
+        r5.addView(createSpaceKey("Space", weight = 3.6f))
+        r5.addView(createCharKey("»", weight = 1.0f))
         r5.addView(createEnterKey(weight = 1.4f))
         keysContainer.addView(r5)
+    }
+
+    // ---- Emoji Layout (Matches Screenshot 5) ----
+    private fun buildEmojiKeyboard() {
+        val rows = listOf(
+            listOf("😂", "🔥", "❤️", "😍", "😊", "🙏", "👍", "👏"),
+            listOf("✨", "🎉", "🥰", "😎", "🤔", "😭", "🥺", "💯"),
+            listOf("⭐", "🌹", "🕊️", "☕", "(✪‿✪)", "(◕‿◕)", "(•‿•)", "(¬_¬)")
+        )
+        rows.forEach { row ->
+            val r = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+            }
+            row.forEach { em ->
+                r.addView(createCharKey(em, weight = 1.0f))
+            }
+            keysContainer.addView(r)
+        }
+
+        val rBottom = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val returnLabel = if (language == "ar") "عربي" else "ABC"
+        rBottom.addView(createSpecialKey(returnLabel, weight = 1.5f, textColor = tealAccent) {
+            currentMode = if (language == "ar") KeyboardMode.ARABIC else KeyboardMode.ENGLISH
+            renderKeyboard()
+        })
+        rBottom.addView(createSpaceKey("Space", weight = 4.5f))
+        rBottom.addView(createBackspaceKey(weight = 1.5f))
+        keysContainer.addView(rBottom)
+    }
+
+    // ---- Clipboard / Dictation History Layout (Matches Screenshot 2) ----
+    private fun buildClipboardKeyboard() {
+        val history = DictionaryStore.readHistory(this)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(190)
+            )
+            setPadding(dp(4), dp(2), dp(4), dp(2))
+        }
+
+        val scroll = android.widget.ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            )
+        }
+
+        val listLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+        }
+
+        if (history.isEmpty()) {
+            listLayout.addView(TextView(this).apply {
+                text = "No saved transcripts yet. Tap 🎙️ Whispr to dictate!"
+                setTextColor(textHint)
+                textSize = 13f
+                gravity = Gravity.CENTER
+                setPadding(0, dp(30), 0, 0)
+            })
+        } else {
+            history.take(6).forEach { item ->
+                val txt = item.optString("text")
+                if (txt.isNotEmpty()) {
+                    val card = TextView(this).apply {
+                        text = "📋 $txt"
+                        setTextColor(textWhite)
+                        textSize = 14f
+                        background = createKeyDrawable(keyBg, keyBgPressed, cornerRadiusDp = 8f)
+                        setPadding(dp(12), dp(8), dp(12), dp(8))
+                        layoutParams = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            setMargins(0, dp(3), 0, dp(3))
+                        }
+                        setOnClickListener {
+                            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                            currentInputConnection?.commitText(txt + " ", 1)
+                        }
+                    }
+                    listLayout.addView(card)
+                }
+            }
+        }
+        scroll.addView(listLayout)
+        container.addView(scroll)
+
+        val rBottom = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        val returnLabel = if (language == "ar") "عربي" else "ABC"
+        rBottom.addView(createSpecialKey(returnLabel, weight = 1.5f, textColor = tealAccent) {
+            currentMode = if (language == "ar") KeyboardMode.ARABIC else KeyboardMode.ENGLISH
+            renderKeyboard()
+        })
+        rBottom.addView(createSpaceKey("Space", weight = 4.5f))
+        rBottom.addView(createBackspaceKey(weight = 1.5f))
+        container.addView(rBottom)
+
+        keysContainer.addView(container)
     }
 
     // ---- Key View Factory Helpers ----
@@ -532,9 +690,12 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             background = createKeyDrawable(keyBg, keyBgPressed)
             isClickable = true
             isFocusable = true
+            val isAr = BilingualGrammarCorrector.isArabic(char)
+            val font = if (isAr) Typeface.DEFAULT_BOLD else Typeface.create(Typeface.SERIF, Typeface.ITALIC)
             addView(TextView(context).apply {
                 text = displayChar
                 textSize = 19f
+                typeface = font
                 setTextColor(textWhite)
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
@@ -555,6 +716,8 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
 
     private fun createCharKeyWithHint(char: String, hint: String?, weight: Float): View {
         val displayChar = if (isShifted || isCapsLock) char.uppercase() else char
+        val isAr = BilingualGrammarCorrector.isArabic(char)
+        val font = if (isAr) Typeface.DEFAULT_BOLD else Typeface.create(Typeface.SERIF, Typeface.ITALIC)
         return FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(0, dp(48), weight).apply {
                 setMargins(dp(2), dp(3), dp(2), dp(3))
@@ -567,6 +730,7 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
                 addView(TextView(context).apply {
                     text = hint
                     textSize = 10f
+                    typeface = Typeface.create(Typeface.SERIF, Typeface.ITALIC)
                     setTextColor(textHint)
                     gravity = Gravity.TOP or Gravity.END
                     setPadding(0, dp(2), dp(4), 0)
@@ -580,6 +744,7 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             addView(TextView(context).apply {
                 text = displayChar
                 textSize = 19f
+                typeface = font
                 setTextColor(textWhite)
                 gravity = Gravity.CENTER
                 layoutParams = FrameLayout.LayoutParams(
