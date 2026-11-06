@@ -109,7 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _recording = false;
   double _level = 0;
   String _language = 'auto';
-  String _modelPreference = 'auto';
+  String _modelPreference = 'default';
   String? _deviceSummary;
 
   @override

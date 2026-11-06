@@ -122,12 +122,14 @@ On the Whispr AI Keyboard and in the app:
    - Punctuation (`.`, `?`, `،`, `؟`) is corrected.
 5. Tap **Insert text** — the text is committed right into your chat or document!
 
-### Offline Speech Recognition on Android
-Android phones include Google's on-device speech recognizer. To use it without internet:
-1. Go to phone **Settings** → **System** → **Languages & input** (or **Gboard** settings).
-2. Tap **Voice typing** → **Offline speech recognition** (or **Downloaded languages**).
-3. Download **English** and **Arabic (العربية)**.
-4. Whispr AI will now transcribe English and Arabic completely offline on your device!
+### Offline Speech Recognition & Lightweight Mobile Model
+Because phone RAM is constrained compared to a laptop or PC, Whispr AI on Android defaults to the **lightweight tier**:
+* Uses Android's built-in on-device speech engine (or Whisper Tiny ~39 MB) which consumes minimal RAM (< 150 MB) and preserves your phone's battery.
+* To ensure offline dictation works without mobile data:
+  1. Go to phone **Settings** → **System** → **Languages & input** (or **Gboard** settings).
+  2. Tap **Voice typing** → **Offline speech recognition** (or **Downloaded languages**).
+  3. Download **English** and **Arabic (العربية)**.
+  4. Whispr AI will now transcribe English and Arabic completely offline on your device with minimal memory!
 
 ---
 

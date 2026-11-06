@@ -105,11 +105,11 @@ Your model folder should look like this:
      * Deduplicate stutter words (e.g., *"the the words"* $\rightarrow$ *"the words"*).
      * Format punctuation and questions (`?` in English, `؟` in Arabic).
 
-### On Android
+### On Android (Mobile RAM Optimized)
 1. Open the **Whispr AI** app.
 2. The home screen displays your device specifications and active model tier:
-   * Multi-core / high-memory devices automatically activate `WHISPERFLOW (GPU)`.
-   * You can tap the `AUTO TIER`, `WHISPERFLOW`, or `DEFAULT` chips at any time to switch.
+   * **Mobile RAM Optimization**: Phones have constrained RAM compared to laptops and desktop workstations. Whispr AI defaults to the **`DEFAULT (CPU)`** lightweight model (~39 MB / on-device speech engine), using under 150 MB total RAM with near-zero battery drain.
+   * If you have a flagship gaming or workstation tablet and want maximum accuracy, you can optionally tap the **`WHISPERFLOW (GPU)`** chip.
 3. Switch the language toggle between `AUTO`, `ENGLISH`, and `العربية`.
 4. Enable the **Whispr AI Keyboard** in system settings to use push-to-talk dictation across all Android apps.
 

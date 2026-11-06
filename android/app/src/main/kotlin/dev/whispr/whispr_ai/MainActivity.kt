@@ -86,23 +86,22 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                     "getDeviceInfo" -> {
                         val cores = Runtime.getRuntime().availableProcessors()
                         val maxMem = Runtime.getRuntime().maxMemory() / (1024 * 1024)
-                        val isHighEnd = cores >= 6 && maxMem >= 256
                         result.success(
                             mapOf(
                                 "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
                                 "os" to "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
                                 "cores" to cores,
                                 "memoryMb" to maxMem,
-                                "hasGpu" to isHighEnd,
-                                "recommendedModel" to if (isHighEnd) "WhisperFlow (High Accuracy)" else "Default (Lightweight)",
-                                "summary" to "${Build.MANUFACTURER} ${Build.MODEL} · $cores Cores · Android ${Build.VERSION.RELEASE}"
+                                "hasGpu" to false, // Phones preserve RAM and battery by prioritizing the lightweight model
+                                "recommendedModel" to "Default (Lightweight)",
+                                "summary" to "${Build.MANUFACTURER} ${Build.MODEL} · Mobile RAM Optimized · Android ${Build.VERSION.RELEASE}"
                             )
                         )
                     }
 
                     "getModelPreference" -> {
                         val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
-                        result.success(prefs.getString("model_preference", "auto") ?: "auto")
+                        result.success(prefs.getString("model_preference", "default") ?: "default")
                     }
 
                     "setModelPreference" -> {
