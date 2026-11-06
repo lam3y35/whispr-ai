@@ -188,3 +188,43 @@ public sealed class DesignSystemTests
         Tokens.Motion.NeedleOvershoot.ShouldBeGreaterThan(0);
     }
 }
+
+/// <summary>Tests for SettingsWindow and device capabilities.</summary>
+public sealed class SettingsWindowTests
+{
+    [AvaloniaFact]
+    public void SettingsWindow_opens_and_renders_hardware_and_model_sections()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"whispr_test_{Guid.NewGuid():N}.json");
+        try
+        {
+            var settings = new Murmur.Core.AppSettings(tempFile);
+            var window = new SettingsWindow(settings);
+            window.Show();
+
+            window.Bounds.Width.ShouldBeGreaterThan(0);
+            window.Bounds.Height.ShouldBeGreaterThan(0);
+        }
+        finally
+        {
+            if (File.Exists(tempFile)) File.Delete(tempFile);
+        }
+    }
+
+    [Fact]
+    public void DeviceCapabilities_detects_system_and_returns_summary()
+    {
+        var dev = Murmur.Speech.DeviceCapabilities.Current;
+        dev.OperatingSystem.ShouldNotBeNullOrWhiteSpace();
+        dev.ProcessorCount.ShouldBeGreaterThan(0);
+        dev.Summary.ShouldNotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public void SpeechModelLocator_search_paths_include_whisper_flow()
+    {
+        var paths = Murmur.Speech.SpeechModelLocator.DefaultSearchPaths().ToList();
+        paths.ShouldContain(p => p.Contains("whisper-flow"));
+    }
+}
+

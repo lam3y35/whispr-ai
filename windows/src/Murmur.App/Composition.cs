@@ -71,7 +71,11 @@ public sealed class Composition : IAsyncDisposable
 
         if (available)
         {
-            var transcriber = SpeechModelLocator.Create(settings.Data.ModelDirectory, settings.Data.Language);
+            var transcriber = SpeechModelLocator.Create(
+                settings.Data.ModelDirectory,
+                settings.Data.Language,
+                settings.Data.ExecutionProvider,
+                settings.Data.ModelPreference);
 
             engine = new DictationEngine(
                 capture!, hotkey!, transcriber, injector!,

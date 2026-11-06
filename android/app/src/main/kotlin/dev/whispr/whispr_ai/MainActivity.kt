@@ -83,6 +83,35 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                         result.success(null)
                     }
 
+                    "getDeviceInfo" -> {
+                        val cores = Runtime.getRuntime().availableProcessors()
+                        val maxMem = Runtime.getRuntime().maxMemory() / (1024 * 1024)
+                        val isHighEnd = cores >= 6 && maxMem >= 256
+                        result.success(
+                            mapOf(
+                                "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
+                                "os" to "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
+                                "cores" to cores,
+                                "memoryMb" to maxMem,
+                                "hasGpu" to isHighEnd,
+                                "recommendedModel" to if (isHighEnd) "WhisperFlow (High Accuracy)" else "Default (Lightweight)",
+                                "summary" to "${Build.MANUFACTURER} ${Build.MODEL} · $cores Cores · Android ${Build.VERSION.RELEASE}"
+                            )
+                        )
+                    }
+
+                    "getModelPreference" -> {
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        result.success(prefs.getString("model_preference", "auto") ?: "auto")
+                    }
+
+                    "setModelPreference" -> {
+                        val pref = call.argument<String>("preference") ?: "auto"
+                        val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                        prefs.edit().putString("model_preference", pref).apply()
+                        result.success(null)
+                    }
+
                     "startDictation" -> startDictation(result)
 
                     "openImeSettings" -> {

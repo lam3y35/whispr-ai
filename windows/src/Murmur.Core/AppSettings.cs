@@ -53,6 +53,12 @@ public sealed record SettingsData
     /// <summary>Where the speech model lives, or null to search the default locations.</summary>
     public string? ModelDirectory { get; init; }
 
+    /// <summary>Model preference: "auto" (GPU -> Best, CPU -> Default), "best" (WhisperFlow), or "default" (Whisper Tiny).</summary>
+    public string ModelPreference { get; init; } = "auto";
+
+    /// <summary>Execution provider: "auto" (DirectML/CUDA if GPU, else CPU), "cpu", or "gpu".</summary>
+    public string ExecutionProvider { get; init; } = "auto";
+
     /// <summary>Whether to type the transcript into the focused app.</summary>
     public bool InjectText { get; init; } = true;
 

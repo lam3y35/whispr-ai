@@ -28,9 +28,11 @@
 - **Touch Control Button to Record**:
   - Touch (tap) the **Control** button (Left Ctrl or Right Ctrl) to start recording immediately.
   - **Smart Dual Mode**: Tap Control once to start recording; tap again to stop and write down the text. Or hold Control while speaking and release when done.
-- **Fast, Lightweight Speech Model**:
-  - Replaced the large 660 MB model requirement with support for **Whisper Tiny Multilingual INT8 (~39 MB)** and **Whisper Base INT8 (~74 MB)**.
-  - Loads in less than a second, transcribes short phrases in ~150 ms on CPU, and runs 100% locally on your computer.
+- **Hardware-Aware Speech Models (GPU & CPU)**:
+  - **Auto Hardware Detection**: Inspects your CPU, RAM, and GPU.
+  - **WhisperFlow Model ("Fast, but good")**: Recommended when GPU is detected (NVIDIA CUDA or DirectML). Uses Whisper Small INT8 (~150-240 MB) for high-accuracy bilingual transcription and complex vocabulary.
+  - **Default Model (Lightweight CPU)**: Recommended for CPU-only systems. Uses Whisper Tiny Multilingual INT8 (~39 MB) or Base (~74 MB). Loads in less than a second and uses negligible battery.
+  - Full details in [docs/WHISPERFLOW_GUIDE.md](file:///home/antigravity/lam3y35/whispr-ai/docs/WHISPERFLOW_GUIDE.md).
 - **Bilingual: English & Arabic**:
   - Native recognition for both English and Arabic with automatic language detection or explicit toggle.
   - Full support for Arabic punctuation (`،` `؛` `؟`) and Right-to-Left (RTL) text.

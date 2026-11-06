@@ -83,6 +83,8 @@ public sealed class SettingsWindow : Window
         Spacing = Tokens.Space.Wide,
         Children =
         {
+            Section("DEVICE & ACCELERATION", BuildHardwareSection()),
+
             Section("PUSH TO TALK", new StackPanel
             {
                 Spacing = Tokens.Space.Snug,
@@ -95,7 +97,7 @@ public sealed class SettingsWindow : Window
                 },
             }),
 
-            Section("MODEL", BuildModelSection()),
+            Section("SPEECH MODEL", BuildModelSection()),
 
             Section("BEHAVIOUR", new StackPanel
             {
@@ -113,9 +115,41 @@ public sealed class SettingsWindow : Window
         },
     };
 
-    private static StackPanel BuildModelSection()
+    private static StackPanel BuildHardwareSection()
     {
-        var located = SpeechModelLocator.Locate();
+        var dev = DeviceCapabilities.Current;
+        var gpuText = dev.HasGpu ? $"{dev.GpuName} (Provider: {dev.PreferredProvider})" : "CPU Execution (No discrete GPU detected)";
+        var tierText = dev.HasGpu
+            ? "GPU acceleration detected: 'WhisperFlow' (Best Model) is recommended."
+            : "CPU mode detected: 'Default Model' (~39 MB lightweight) is recommended.";
+
+        return new StackPanel
+        {
+            Spacing = Tokens.Space.Snug,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"{dev.OperatingSystem} · {dev.ProcessorCount} Cores · {dev.TotalMemoryMb} MB RAM",
+                    FontFamily = Tokens.Fonts.Grotesque,
+                    FontSize = Tokens.Fonts.Body,
+                    Foreground = Tokens.Brushes.Ink,
+                },
+                new TextBlock
+                {
+                    Text = gpuText,
+                    FontFamily = Tokens.Fonts.Grotesque,
+                    FontSize = Tokens.Fonts.Label,
+                    Foreground = dev.HasGpu ? new SolidColorBrush(Tokens.Colors.MeterGreen) : Tokens.Brushes.Muted,
+                },
+                Note(tierText),
+            },
+        };
+    }
+
+    private StackPanel BuildModelSection()
+    {
+        var located = SpeechModelLocator.Locate(_settings.Data.ModelPreference);
         var found = located is not null;
 
         var status = new StackPanel
@@ -141,13 +175,45 @@ public sealed class SettingsWindow : Window
             },
         };
 
+        var tierRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = Tokens.Space.Snug,
+        };
+
+        var tiers = new (string Value, string Label)[]
+        {
+            ("auto", "AUTO (SMART)"),
+            ("best", "WHISPERFLOW (GPU)"),
+            ("default", "DEFAULT (CPU)"),
+        };
+
+        foreach (var (val, lbl) in tiers)
+        {
+            var btn = new TransportKey
+            {
+                Content = lbl,
+                IsEngaged = string.Equals(_settings.Data.ModelPreference, val, StringComparison.OrdinalIgnoreCase),
+                EngagedColor = Tokens.Colors.Ink,
+            };
+            btn.Click += (_, _) =>
+            {
+                Save(_settings.Data with { ModelPreference = val });
+                foreach (TransportKey k in tierRow.Children)
+                {
+                    k.IsEngaged = k.Content?.ToString() == lbl;
+                }
+            };
+            tierRow.Children.Add(btn);
+        }
+
         var detail = found
             ? Note($"Loaded from {located!.Value.Directory}")
-            : Note("Download the fast, lightweight Whisper model (~39 MB) for bilingual English & "
-                 + "Arabic dictation, or Parakeet (~660 MB for English). See docs/USAGE.md. Expected in:\n"
-                 + string.Join("\n", SpeechModelLocator.DefaultSearchPaths().Take(4)));
+            : Note("Download the fast, lightweight Whisper model (~39 MB) or high-accuracy WhisperFlow (~150-240 MB) "
+                 + "for bilingual English & Arabic dictation. See docs/WHISPERFLOW_GUIDE.md. Expected in:\n"
+                 + string.Join("\n", SpeechModelLocator.DefaultSearchPaths().Take(5)));
 
-        return new StackPanel { Spacing = Tokens.Space.Snug, Children = { status, detail } };
+        return new StackPanel { Spacing = Tokens.Space.Snug, Children = { status, tierRow, detail } };
     }
 
     private void SelectKey(int key, string? warning)

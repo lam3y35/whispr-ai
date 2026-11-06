@@ -109,6 +109,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _recording = false;
   double _level = 0;
   String _language = 'auto';
+  String _modelPreference = 'auto';
+  String? _deviceSummary;
 
   @override
   void initState() {
@@ -127,6 +129,18 @@ class _HomeScreenState extends State<HomeScreen> {
       }).catchError((dynamic _) {
         return null;
       });
+      bridge.invokeMethod<String>('getModelPreference').then((val) {
+        if (val != null && mounted) setState(() => _modelPreference = val);
+      }).catchError((dynamic _) {
+        return null;
+      });
+      bridge.invokeMethod<Map<dynamic, dynamic>>('getDeviceInfo').then((info) {
+        if (info != null && mounted) {
+          setState(() => _deviceSummary = info['summary'] as String?);
+        }
+      }).catchError((dynamic _) {
+        return null;
+      });
     }
   }
 
@@ -142,6 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _language = lang);
     if (_isAndroid) {
       await bridge.invokeMethod('setLanguage', {'language': lang});
+    }
+  }
+
+  Future<void> _setModelPreference(String pref) async {
+    setState(() => _modelPreference = pref);
+    if (_isAndroid) {
+      await bridge.invokeMethod('setModelPreference', {'preference': pref});
     }
   }
 
@@ -229,7 +250,38 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _LangChip(
+                  label: 'AUTO TIER',
+                  selected: _modelPreference == 'auto',
+                  onTap: () => _setModelPreference('auto'),
+                ),
+                const SizedBox(width: 8),
+                _LangChip(
+                  label: 'WHISPERFLOW (GPU)',
+                  selected: _modelPreference == 'best',
+                  onTap: () => _setModelPreference('best'),
+                ),
+                const SizedBox(width: 8),
+                _LangChip(
+                  label: 'DEFAULT (CPU)',
+                  selected: _modelPreference == 'default',
+                  onTap: () => _setModelPreference('default'),
+                ),
+              ],
+            ),
+            if (_deviceSummary != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _deviceSummary!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Tokens.muted, fontSize: 10),
+              ),
+            ],
+            const SizedBox(height: 16),
             _RecordButton(recording: _recording, level: _level, onTap: _record),
             const SizedBox(height: 24),
             Container(
