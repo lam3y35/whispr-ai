@@ -430,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         Switch(
                           value: _floatingButtonActive,
-                          activeColor: const Color(0xFF00E5FF),
+                          activeThumbColor: const Color(0xFF00E5FF),
                           onChanged: _toggleFloatingButton,
                         ),
                       ],
