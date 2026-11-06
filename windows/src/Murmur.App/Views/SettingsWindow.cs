@@ -140,7 +140,7 @@ public sealed class SettingsWindow : Window
                     Text = gpuText,
                     FontFamily = Tokens.Fonts.Grotesque,
                     FontSize = Tokens.Fonts.Label,
-                    Foreground = dev.HasGpu ? new SolidColorBrush(Tokens.Colors.MeterGreen) : Tokens.Brushes.Muted,
+                    Foreground = dev.HasGpu ? new SolidColorBrush(Tokens.Colors.MeterGreen) : new SolidColorBrush(Tokens.Colors.InkSecondary),
                 },
                 Note(tierText),
             },
