@@ -7,9 +7,11 @@ namespace Murmur.Core;
 /// Corrects grammar, normalizes punctuation, capitalizes sentences, and removes disfluencies/fillers
 /// for bilingual English and Arabic dictation.
 /// </summary>
-public sealed class BilingualGrammarCorrector
+public class BilingualGrammarCorrector
 {
     private static readonly Lazy<BilingualGrammarCorrector> s_instance = new(() => new BilingualGrammarCorrector());
+
+    /// <summary>Singleton instance of the bilingual grammar corrector.</summary>
     public static BilingualGrammarCorrector Instance => s_instance.Value;
 
     // English filler words and hesitations
@@ -65,7 +67,8 @@ public sealed class BilingualGrammarCorrector
     }
 
     /// <summary>Applies bilingual grammar, punctuation, and filler correction to the text.</summary>
-    public string Correct(string? raw)
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static", Justification = "Instance member preserved for dependency injection and mocking")]
+    public virtual string Correct(string? raw)
     {
         if (string.IsNullOrWhiteSpace(raw)) return string.Empty;
 

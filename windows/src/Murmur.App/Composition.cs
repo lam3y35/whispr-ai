@@ -105,23 +105,3 @@ public sealed class Composition : IAsyncDisposable
     }
 }
 
-/// <summary>
-/// A transcriber that reports the model is missing rather than throwing.
-/// </summary>
-/// <remarks>
-/// A fresh Windows install has no model, and that has to be a readable message in Settings
-/// rather than a crash on first press.
-/// </remarks>
-internal sealed class UnavailableTranscriber : ITranscriber
-{
-    public bool IsReady => false;
-
-    public ValueTask<bool> LoadAsync(CancellationToken cancellationToken) => ValueTask.FromResult(false);
-
-    public ValueTask<string> TranscribeAsync(
-        ReadOnlyMemory<float> samples,
-        IReadOnlyList<string> biasPhrases,
-        CancellationToken cancellationToken) => ValueTask.FromResult(string.Empty);
-
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-}

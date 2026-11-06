@@ -1,19 +1,24 @@
 /// Bilingual grammar and punctuation corrector for English and Arabic.
-library;
 
 final RegExp _enFillers = RegExp(r'\b(um|uh|uhm|er|ah|erm)\b[,\s]*', caseSensitive: false);
 final RegExp _arFillers = RegExp(r'(^|\s)(يعني|أمم|اممم|آآآ|ااه|إيه|هاه|يعنى)(\s|$|(?=[،.؟!]))');
 final RegExp _repeatedWords = RegExp(r'\b([\p{L}\p{N}]+)\s+\1\b', caseSensitive: false, unicode: true);
-final RegExp _standaloneI = RegExp(r'(^|\s)i(\s|[.,!?;' r']|$)');
+final RegExp _standaloneI = RegExp(r"(^|\s)i(\s|[.,!?;']|$)");
 final RegExp _iContractions = RegExp(r"\bi('(?:m|ve|ll|d))\b", caseSensitive: false);
+final RegExp _enSpacesPunct = RegExp(r'\s+([.,!?;:])');
+final RegExp _enSentenceStart = RegExp(r'([.!?]\s+)([a-z])');
+final RegExp _unicodeWordChar = RegExp(r'[\p{L}\p{N}]', unicode: true);
+final RegExp _arSpacesPunct = RegExp(r'\s+([،؛؟.!])');
+final RegExp _arPunctSpacing = RegExp(r'([،؛؟.!])(?=[\p{L}\p{N}])', unicode: true);
+final RegExp _multipleSpaces = RegExp(r'\s+');
 
-final Set<String> _enQuestionStarters = {
+const Set<String> _enQuestionStarters = {
   'who', 'what', 'where', 'when', 'why', 'how',
   'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would',
   'do', 'does', 'did', 'will', 'have', 'has', 'am'
 };
 
-final Set<String> _arQuestionStarters = {
+const Set<String> _arQuestionStarters = {
   'هل', 'ماذا', 'ما', 'كيف', 'متى', 'أين', 'لماذا', 'كم', 'من', 'أي', 'أ'
 };
 
@@ -50,7 +55,7 @@ String correctBilingualGrammar(String? raw, [String language = 'auto']) {
   text = text.replaceAllMapped(_repeatedWords, (m) => m.group(1)!);
 
   // 3. Clean spaces
-  text = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+  text = text.replaceAll(_multipleSpaces, ' ').trim();
   if (text.isEmpty) return '';
 
   // 4. Language-specific formatting
@@ -61,16 +66,16 @@ String _correctEnglish(String text) {
   var t = text;
   t = t.replaceAllMapped(_standaloneI, (m) => '${m.group(1)}I${m.group(2)}');
   t = t.replaceAllMapped(_iContractions, (m) => 'I${m.group(1)}');
-  t = t.replaceAll(RegExp(r'\s+([.,!?;:])'), r'$1');
+  t = t.replaceAll(_enSpacesPunct, r'$1');
 
   if (t.isNotEmpty && t[0].toLowerCase() != t[0].toUpperCase()) {
     t = t[0].toUpperCase() + t.substring(1);
   }
 
-  t = t.replaceAllMapped(RegExp(r'([.!?]\s+)([a-z])'), (m) => '${m.group(1)}${m.group(2)!.toUpperCase()}');
+  t = t.replaceAllMapped(_enSentenceStart, (m) => '${m.group(1)}${m.group(2)!.toUpperCase()}');
 
   final lastChar = t[t.length - 1];
-  if (RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(lastChar)) {
+  if (_unicodeWordChar.hasMatch(lastChar)) {
     final firstWord = t.split(' ').first.trim().toLowerCase();
     t = _enQuestionStarters.contains(firstWord) ? '$t?' : '$t.';
   }
@@ -84,11 +89,11 @@ String _correctArabic(String text) {
       .replaceAll(';', '؛')
       .replaceAll('?', '؟');
 
-  t = t.replaceAll(RegExp(r'\s+([،؛؟.\!])'), r'$1');
-  t = t.replaceAllMapped(RegExp(r'([،؛؟.\!])(?=[\p{L}\p{N}])', unicode: true), (m) => '${m.group(1)} ');
+  t = t.replaceAll(_arSpacesPunct, r'$1');
+  t = t.replaceAllMapped(_arPunctSpacing, (m) => '${m.group(1)} ');
 
   final lastChar = t[t.length - 1];
-  if (RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(lastChar)) {
+  if (_unicodeWordChar.hasMatch(lastChar)) {
     final firstWord = t.split(' ').first.trim();
     t = _arQuestionStarters.contains(firstWord) ? '$t؟' : '$t.';
   }

@@ -122,9 +122,11 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _loadLast();
     if (_isAndroid) {
-      bridge.invokeMethod('getLanguage').then((val) {
-        if (val is String && mounted) setState(() => _language = val);
-      }).catchError((_) {});
+      bridge.invokeMethod<String>('getLanguage').then((val) {
+        if (val != null && mounted) setState(() => _language = val);
+      }).catchError((dynamic _) {
+        return null;
+      });
     }
   }
 
