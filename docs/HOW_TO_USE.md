@@ -112,15 +112,23 @@ On the Whispr AI Keyboard and in the app:
   - **`عربي`**: Forces Arabic speech recognition.
   - **`AUTO`**: Detects automatically based on your voice.
 
-### Using it in Any App
-1. Open WhatsApp, Telegram, Notes, or any app and tap a text field.
-2. Switch to the Whispr AI keyboard (tap the keyboard/globe icon in the bottom navigation bar or spacebar).
-3. Tap the red **● TAP TO DICTATE** button.
-4. Speak in English or Arabic:
-   - Your speech appears in real-time in the preview window with Arabic RTL alignment or English formatting.
-   - Fillers (*"um"*, *"يعني"*) and stutters (*"the the"*) are automatically stripped.
-   - Punctuation (`.`, `?`, `،`, `؟`) is corrected.
-5. Tap **Insert text** — the text is committed right into your chat or document!
+### The Flying Dictation Button (الزر العائم — الكتابة بالصوت فوق أي تطبيق)
+If you prefer not to switch keyboards, you can use the **Flying / Floating Button**:
+1. Open the **Whispr AI** app.
+2. Under **FLYING BUTTON · الزر العائم**, toggle the switch to **ON**.
+3. When prompted, allow the **"Display over other apps" (الظهور فوق التطبيقات الأخرى)** permission.
+4. A floating, draggable circular microphone button (`🎙️`) will appear on your screen over any app (WhatsApp, Telegram, Notes, Chrome, etc.).
+5. **How to dictate**:
+   - Tap the `🎙️` button: it turns red (`⏹️`) and begins listening.
+   - Speak in Arabic or English: a floating preview bubble appears in real-time showing your words as you speak them!
+   - Tap again (or pause) to finish: Whispr AI instantly corrects grammar, removes stutters and filler words (*"يعني"*, *"um"*), and copies the polished text to your clipboard.
+   - Tap **Paste (لصق)** in your chat or text box!
+
+### Using the Full Bilingual Keyboard (لوحة المفاتيح الكاملة)
+1. In the Whispr AI app, tap **"Enable Whispr Keyboard"** and enable it in Android Settings.
+2. In any app: tap a text field, switch to the Whispr AI keyboard.
+3. Tap the push-to-talk mic button, speak, and the corrected text is inserted directly at your cursor.
+4. Enjoy the obsidian & cyan theme, Arabic & English layouts, emoji bar, and clipboard history.
 
 ### Offline Speech Recognition & Lightweight Mobile Model
 Because phone RAM is constrained compared to a laptop or PC, Whispr AI on Android defaults to the **lightweight tier**:
@@ -154,6 +162,8 @@ Open the **Dictionary** tab in Windows or Android:
 
 | Problem | Cause | Solution |
 |---|---|---|
+| **Android: "dictation failed on device recognition is not available"** | Device (e.g. Xiaomi / HyperOS / MIUI) lacks Google's pre-installed offline speech pack | **Fixed in v0.2.4**: Whispr AI uses universal system recognizer with intent dialog fallback and package visibility queries. Also ensure Google Speech or device voice typing is active. |
+| **Android: Floating button doesn't show up** | Overlay permission not granted | Open Whispr AI app → toggle Flying Button switch → grant *"Display over other apps"* permission in Settings. |
 | **Windows: Nothing happens when pressing Ctrl** | Trigger key mismatch | Open Settings → set Push-to-Talk key to **ANY CTRL** or **LEFT CTRL**. |
 | **Windows: Recorded audio is digital silence** | Mic permission disabled | Windows Settings → **Privacy & security** → **Microphone** → Turn ON *"Let desktop apps access your microphone"*. |
 | **Windows: Speech model not installed** | Missing model files | Place the 3 Whisper files in `%LOCALAPPDATA%\WhisprAI\models\whisper-tiny\`. |
@@ -170,4 +180,5 @@ Open the **Dictionary** tab in Windows or Android:
 - [x] **Lightweight Model**: Whisper INT8 (~39 MB), fast and compact.
 - [x] **Bilingual Support**: English & Arabic with automatic language detection and RTL support.
 - [x] **Grammar Correction**: Automatically cleans fillers (*"um"*, *"يعني"*), fixes stutters (*"the the"*), capitalizes, and formats punctuation (`.`, `?`, `،`, `؟`).
-- [x] **Android Version**: Native APK + on-screen dictation keyboard with 1-tap Arabic/English toggle.
+- [x] **Flying Button Widget (الزر العائم)**: Floats over all apps with real-time speech preview and auto-copy.
+- [x] **Android Keyboard**: Full obsidian & cyan keyboard layout with push-to-talk voice button.

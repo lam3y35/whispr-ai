@@ -111,6 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String _language = 'auto';
   String _modelPreference = 'default';
   String? _deviceSummary;
+  bool _floatingButtonActive = false;
 
   @override
   void initState() {
@@ -124,6 +125,7 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     _loadLast();
     if (_isAndroid) {
+      _checkFloatingButtonStatus();
       bridge.invokeMethod<String>('getLanguage').then((val) {
         if (val != null && mounted) setState(() => _language = val);
       }).catchError((dynamic _) {
@@ -141,6 +143,57 @@ class _HomeScreenState extends State<HomeScreen> {
       }).catchError((dynamic _) {
         return null;
       });
+    }
+  }
+
+  Future<void> _checkFloatingButtonStatus() async {
+    if (!_isAndroid) return;
+    try {
+      final running = await bridge.invokeMethod<bool>('isFloatingButtonRunning');
+      if (running != null && mounted) {
+        setState(() => _floatingButtonActive = running);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleFloatingButton(bool enable) async {
+    if (!_isAndroid) return;
+    if (enable) {
+      final granted =
+          await bridge.invokeMethod<bool>('isOverlayPermissionGranted') ?? false;
+      if (!granted) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Please grant "Display over other apps" permission so the floating mic can appear.\nيرجى السماح بالظهور فوق التطبيقات الأخرى.',
+              ),
+              duration: Duration(seconds: 4),
+            ),
+          );
+        }
+        await bridge.invokeMethod('requestOverlayPermission');
+        return;
+      }
+      final started =
+          await bridge.invokeMethod<bool>('startFloatingButton') ?? false;
+      if (mounted) {
+        setState(() => _floatingButtonActive = started);
+        if (started) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Floating mic active! Tap 🎙️ on screen anytime to dictate with live preview.',
+              ),
+            ),
+          );
+        }
+      }
+    } else {
+      await bridge.invokeMethod('stopFloatingButton');
+      if (mounted) {
+        setState(() => _floatingButtonActive = false);
+      }
     }
   }
 
@@ -239,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: Padding(
+      body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -301,7 +354,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
             const SizedBox(height: 16),
             _RecordButton(recording: _recording, level: _level, onTap: _record),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
@@ -309,32 +362,107 @@ class _HomeScreenState extends State<HomeScreen> {
                 border: Border.all(color: Tokens.panelEdge),
                 borderRadius: BorderRadius.circular(6),
               ),
-              constraints: const BoxConstraints(minHeight: 96),
+              constraints: const BoxConstraints(minHeight: 88),
               child: Text(
                 _lastText ?? 'Your last dictation will appear here.',
                 textDirection: isArabic(_lastText ?? '') ? TextDirection.rtl : TextDirection.ltr,
                 style: const TextStyle(color: Tokens.ink, fontSize: 16, height: 1.4),
               ),
             ),
-            const Spacer(),
+            const SizedBox(height: 20),
             if (_isAndroid) ...[
-              const _Label('SETUP'),
+              // Flying / Floating Dictation Button Card
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Tokens.panel,
+                  border: Border.all(
+                    color: _floatingButtonActive ? const Color(0xFF00E5FF) : Tokens.panelEdge,
+                    width: _floatingButtonActive ? 1.5 : 1.0,
+                  ),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: _floatingButtonActive
+                                ? const Color(0x2600E5FF)
+                                : Colors.black26,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Text('🎙️', style: TextStyle(fontSize: 20)),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'FLYING BUTTON \u00b7 الزر العائم',
+                                style: TextStyle(
+                                  color: _floatingButtonActive
+                                      ? const Color(0xFF00E5FF)
+                                      : Tokens.ink,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                _floatingButtonActive
+                                    ? 'Active \u00b7 Floats over all apps (نشط فوق كل التطبيقات)'
+                                    : 'Inactive \u00b7 Toggle to enable overlay',
+                                style: TextStyle(
+                                  color: _floatingButtonActive
+                                      ? Colors.greenAccent
+                                      : Tokens.muted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Switch(
+                          value: _floatingButtonActive,
+                          activeColor: const Color(0xFF00E5FF),
+                          onChanged: _toggleFloatingButton,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    const Text(
+                      '\u2022 Floats over WhatsApp, Telegram, Notes, Chrome, or any app.\n'
+                      '\u2022 Tap \ud83c\udf99\ufe0f to speak \u2014 words appear live as you talk!\n'
+                      '\u2022 Fixes grammar & auto-copies clean text to clipboard.\n'
+                      '\u2022 زر عائم يظهر فوق التطبيقات، اضغط وتحدث لتنسخ النص المصحح فوراً.',
+                      style: TextStyle(color: Tokens.muted, fontSize: 11, height: 1.45),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _Label('ALTERNATIVE: FULL KEYBOARD'),
               const SizedBox(height: 8),
               FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: Tokens.panel,
                   foregroundColor: Tokens.amber,
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(14),
                 ),
                 icon: const Icon(Icons.keyboard),
-                label: const Text('Enable the Whispr AI keyboard'),
+                label: const Text('Enable Whispr Keyboard (لوحة المفاتيح)'),
                 onPressed: () => bridge.invokeMethod('openImeSettings'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 6),
               const Text(
-                'Then in any app: tap a text field, switch keyboards (globe / \u2325 space), '
-                'tap the red button, speak, tap Insert.',
-                style: TextStyle(color: Tokens.muted, fontSize: 12, height: 1.4),
+                'Full obsidian & cyan keyboard layout with push-to-talk voice button.',
+                style: TextStyle(color: Tokens.muted, fontSize: 11, height: 1.4),
               ),
             ] else
               const Text('Run this on Android for dictation.',

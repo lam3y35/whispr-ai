@@ -1,0 +1,385 @@
+package dev.whispr.whispr_ai
+
+import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.content.pm.ServiceInfo
+import android.graphics.Color
+import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
+import android.os.Bundle
+import android.os.Handler
+import android.os.IBinder
+import android.os.Looper
+import android.provider.Settings
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import android.view.Gravity
+import android.view.HapticFeedbackConstants
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import android.widget.Toast
+
+/**
+ * Floating / Flying Dictation Button Service.
+ * Renders a draggable overlay button over any app on screen.
+ * Tapping it records your speech, shows the live transcript in real-time as you speak,
+ * corrects grammar (stutter removal, punctuation, Arabic & English grammar),
+ * and copies the clean text to the clipboard so it can be pasted into any active text field.
+ */
+class FloatingDictationService : Service(), RecognitionListener {
+
+    private lateinit var windowManager: WindowManager
+    private lateinit var overlayView: LinearLayout
+    private lateinit var floatingMicButton: FrameLayout
+    private lateinit var liveTranscriptBubble: TextView
+    private lateinit var micIconText: TextView
+
+    private var recognizer: SpeechRecognizer? = null
+    private var isRecording = false
+    private var rules: List<DictionaryCorrector.Rule> = emptyList()
+    private var language: String = "auto"
+
+    private val tealColor = Color.parseColor("#00E5FF")
+    private val darkBg = Color.parseColor("#15171E")
+    private val redRec = Color.parseColor("#E53935")
+    private val textWhite = Color.parseColor("#FFFFFF")
+    private val textHint = Color.parseColor("#9E9E9E")
+
+    private val mainHandler = Handler(Looper.getMainLooper())
+
+    companion object {
+        var isRunning = false
+            private set
+        private const val NOTIF_CHANNEL_ID = "whispr_floating_service"
+        private const val NOTIF_ID = 2001
+    }
+
+    override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+    private fun dpF(v: Float): Float = v * resources.displayMetrics.density
+
+    override fun onCreate() {
+        super.onCreate()
+        isRunning = true
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        rules = DictionaryStore.rules(this)
+
+        val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
+        language = prefs.getString("language", "auto") ?: "auto"
+
+        startForegroundServiceNotification()
+        createFloatingWidget()
+    }
+
+    private fun startForegroundServiceNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                NOTIF_CHANNEL_ID,
+                "Whispr Flying Button",
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = "Whispr AI floating dictation widget"
+            }
+            val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
+
+        val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, NOTIF_CHANNEL_ID)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }
+
+        val notification = notificationBuilder
+            .setContentTitle("Whispr AI Floating Button")
+            .setContentText("Tap the floating mic anytime to dictate with grammar")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .build()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } else {
+            startForeground(NOTIF_ID, notification)
+        }
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun createFloatingWidget() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            stopSelf()
+            return
+        }
+
+        val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+
+        val params = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            layoutType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = resources.displayMetrics.widthPixels - dp(75)
+            y = resources.displayMetrics.heightPixels / 3
+        }
+
+        overlayView = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+        }
+
+        // Live transcript preview bubble (appears next to the floating button when speaking)
+        liveTranscriptBubble = TextView(this).apply {
+            text = "Speak now…"
+            textSize = 13f
+            setTextColor(textWhite)
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dpF(12f)
+                setColor(darkBg)
+                setStroke(dp(1), tealColor)
+            }
+            setPadding(dp(12), dp(8), dp(12), dp(8))
+            visibility = View.GONE
+            layoutParams = LinearLayout.LayoutParams(
+                dp(210),
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                setMargins(0, 0, dp(8), 0)
+            }
+        }
+
+        // The circular draggable floating button
+        floatingMicButton = FrameLayout(this).apply {
+            layoutParams = FrameLayout.LayoutParams(dp(54), dp(54))
+            background = createCircleDrawable(darkBg, tealColor)
+            isClickable = true
+            isFocusable = true
+        }
+
+        micIconText = TextView(this).apply {
+            text = "🎙️"
+            textSize = 22f
+            gravity = Gravity.CENTER
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+        }
+        floatingMicButton.addView(micIconText)
+
+        overlayView.addView(liveTranscriptBubble)
+        overlayView.addView(floatingMicButton)
+
+        // Dragging & Click Handling
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var isClick = false
+
+        floatingMicButton.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isClick = true
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+                    if (Math.abs(dx) > dp(5) || Math.abs(dy) > dp(5)) {
+                        isClick = false
+                    }
+                    params.x = initialX + dx
+                    params.y = initialY + dy
+                    try {
+                        windowManager.updateViewLayout(overlayView, params)
+                    } catch (_: Exception) {}
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (isClick) {
+                        v.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        toggleRecording()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+
+        try {
+            windowManager.addView(overlayView, params)
+        } catch (e: Exception) {
+            stopSelf()
+        }
+    }
+
+    private fun createCircleDrawable(fillColor: Int, strokeColor: Int): GradientDrawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.OVAL
+            setColor(fillColor)
+            setStroke(dp(2), strokeColor)
+        }
+    }
+
+    private fun toggleRecording() {
+        if (isRecording) {
+            stopRecording()
+        } else {
+            startRecording()
+        }
+    }
+
+    private fun startRecording() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            Toast.makeText(this, "Speech recognition is not available on this device", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        rules = DictionaryStore.rules(this)
+        val prefs = getSharedPreferences("whispr_ime_prefs", Context.MODE_PRIVATE)
+        language = prefs.getString("language", "auto") ?: "auto"
+
+        recognizer?.destroy()
+        // Universal SpeechRecognizer creation - avoids on-device requirement errors
+        recognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        recognizer?.setRecognitionListener(this)
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            if (language == "ar") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-SA", "ar-EG", "ar-AE", "ar"))
+            } else if (language == "en") {
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
+            }
+        }
+
+        isRecording = true
+        floatingMicButton.background = createCircleDrawable(redRec, Color.WHITE)
+        micIconText.text = "⏹️"
+        liveTranscriptBubble.text = "Listening… Speak now"
+        liveTranscriptBubble.setTextColor(textHint)
+        liveTranscriptBubble.visibility = View.VISIBLE
+
+        try {
+            recognizer?.startListening(intent)
+        } catch (e: Exception) {
+            resetIdleState()
+            Toast.makeText(this, "Failed to start speech: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun stopRecording() {
+        isRecording = false
+        recognizer?.stopListening()
+        liveTranscriptBubble.text = "Processing grammar…"
+    }
+
+    private fun resetIdleState() {
+        isRecording = false
+        floatingMicButton.background = createCircleDrawable(darkBg, tealColor)
+        micIconText.text = "🎙️"
+        mainHandler.postDelayed({
+            liveTranscriptBubble.visibility = View.GONE
+        }, 2500)
+    }
+
+    // ---- Speech Recognition Listener Callbacks ----
+
+    override fun onPartialResults(partialResults: Bundle?) {
+        val list = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION) ?: return
+        if (list.isNotEmpty()) {
+            val partial = list[0]
+            liveTranscriptBubble.text = partial
+            liveTranscriptBubble.setTextColor(tealColor)
+        }
+    }
+
+    override fun onResults(results: Bundle?) {
+        val list = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+        val raw = list?.firstOrNull().orEmpty()
+        if (raw.isEmpty()) {
+            liveTranscriptBubble.text = "No speech detected"
+            resetIdleState()
+            return
+        }
+
+        // Apply bilingual grammar and dictionary corrections
+        val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
+        val cleaned = BilingualGrammarCorrector.correct(dictCorrected, language)
+
+        // Copy cleaned text to clipboard so user can immediately paste anywhere
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("Whispr AI Dictation", cleaned))
+
+        DictionaryStore.appendTranscript(this, cleaned, applied)
+
+        liveTranscriptBubble.text = "✓ Copied: $cleaned"
+        liveTranscriptBubble.setTextColor(Color.parseColor("#4CAF50"))
+        Toast.makeText(this, "✓ Dictated & Copied! Paste anywhere", Toast.LENGTH_SHORT).show()
+
+        resetIdleState()
+    }
+
+    override fun onError(error: Int) {
+        val errorMsg = when (error) {
+            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech heard"
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Mic permission missing"
+            SpeechRecognizer.ERROR_NETWORK -> "Network or offline pack needed"
+            else -> "Speech error ($error)"
+        }
+        liveTranscriptBubble.text = errorMsg
+        liveTranscriptBubble.setTextColor(Color.parseColor("#FF5252"))
+        resetIdleState()
+    }
+
+    override fun onReadyForSpeech(params: Bundle?) {}
+    override fun onBeginningOfSpeech() {}
+    override fun onEndOfSpeech() {}
+    override fun onBufferReceived(buffer: ByteArray?) {}
+    override fun onRmsChanged(rmsdB: Float) {}
+    override fun onEvent(eventType: Int, params: Bundle?) {}
+
+    override fun onDestroy() {
+        isRunning = false
+        recognizer?.destroy()
+        try {
+            if (::overlayView.isInitialized) {
+                windowManager.removeView(overlayView)
+            }
+        } catch (_: Exception) {}
+        super.onDestroy()
+    }
+}

@@ -8,6 +8,8 @@ import android.os.Build
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.net.Uri
+import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -118,6 +120,48 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                         result.success(null)
                     }
 
+                    "isOverlayPermissionGranted" -> {
+                        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            Settings.canDrawOverlays(this@MainActivity)
+                        } else true
+                        result.success(granted)
+                    }
+
+                    "requestOverlayPermission" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")
+                            )
+                            startActivity(intent)
+                        }
+                        result.success(null)
+                    }
+
+                    "startFloatingButton" -> {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this@MainActivity)) {
+                            result.success(false)
+                        } else {
+                            val intent = Intent(this@MainActivity, FloatingDictationService::class.java)
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                startForegroundService(intent)
+                            } else {
+                                startService(intent)
+                            }
+                            result.success(true)
+                        }
+                    }
+
+                    "stopFloatingButton" -> {
+                        val intent = Intent(this@MainActivity, FloatingDictationService::class.java)
+                        stopService(intent)
+                        result.success(true)
+                    }
+
+                    "isFloatingButtonRunning" -> {
+                        result.success(FloatingDictationService.isRunning)
+                    }
+
                     else -> result.notImplemented()
                 }
             }
@@ -125,19 +169,52 @@ class MainActivity : FlutterActivity(), RecognitionListener {
     }
 
     private fun createSpeechRecognizerSafely(): SpeechRecognizer? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            try {
-                if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-                    return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-                }
-            } catch (_: Throwable) {
-                // Fall back to standard system recognizer if on-device fails or throws
-            }
-        }
+        // ALWAYS use universal createSpeechRecognizer. Never call createOnDeviceSpeechRecognizer
+        // because it throws "IllegalArgumentException: on-device recognition is not available"
+        // when Google on-device speech packs are not pre-installed on the user's phone.
         return try {
             SpeechRecognizer.createSpeechRecognizer(this)
         } catch (_: Throwable) {
             null
+        }
+    }
+
+    private val REQ_SPEECH_INTENT = 4001
+
+    private fun startSpeechIntentFallback() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        try {
+            startActivityForResult(intent, REQ_SPEECH_INTENT)
+        } catch (_: Exception) {
+            recognizerResult?.success(mapOf("error" to "no_recognizer"))
+            recognizerResult = null
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_SPEECH_INTENT) {
+            if (resultCode == RESULT_OK && data != null) {
+                val matches = data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                val raw = matches?.firstOrNull().orEmpty()
+                if (raw.isNotEmpty()) {
+                    rules = DictionaryStore.rules(this)
+                    val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
+                    val prefs = getSharedPreferences("whispr_ime_prefs", MODE_PRIVATE)
+                    val lang = prefs.getString("language", "auto") ?: "auto"
+                    val corrected = BilingualGrammarCorrector.correct(dictCorrected, lang)
+                    DictionaryStore.appendTranscript(this, corrected, applied)
+                    recognizerResult?.success(mapOf("text" to corrected))
+                } else {
+                    recognizerResult?.success(mapOf("error" to "no_speech"))
+                }
+            } else {
+                recognizerResult?.success(mapOf("error" to "cancelled"))
+            }
+            recognizerResult = null
         }
     }
 
@@ -152,16 +229,14 @@ class MainActivity : FlutterActivity(), RecognitionListener {
             )
             return
         }
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            result.success(mapOf("error" to "no_recognizer"))
-            return
-        }
         rules = DictionaryStore.rules(this)
         inAppFinal = ""
         recognizer?.destroy()
         recognizer = createSpeechRecognizerSafely()
         if (recognizer == null) {
-            result.success(mapOf("error" to "no_recognizer"))
+            // Fall back to standard intent dialog so it never fails on any device
+            recognizerResult = result
+            startSpeechIntentFallback()
             return
         }
         recognizer?.setRecognitionListener(this)
@@ -173,8 +248,8 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             if (lang == "ar") {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
                 putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-SA", "ar-EG", "ar-AE", "ar"))
@@ -185,9 +260,9 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         }
         try {
             recognizer?.startListening(intent)
-        } catch (e: Exception) {
-            recognizerResult?.success(mapOf("error" to (e.localizedMessage ?: "start_failed")))
-            recognizerResult = null
+        } catch (_: Exception) {
+            // If service throws startListening error, use intent dialog fallback
+            startSpeechIntentFallback()
         }
     }
 

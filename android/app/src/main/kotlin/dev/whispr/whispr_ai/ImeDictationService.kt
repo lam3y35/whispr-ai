@@ -938,15 +938,9 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
     // ---- Speech Recognition Engine (Safe On-Device with Fallback) ----
 
     private fun createSpeechRecognizerSafely(): SpeechRecognizer? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            try {
-                if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
-                    return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-                }
-            } catch (_: Throwable) {
-                // Fall back to standard recognizer
-            }
-        }
+        // ALWAYS use universal createSpeechRecognizer. Never call createOnDeviceSpeechRecognizer
+        // because it throws "IllegalArgumentException: on-device recognition is not available"
+        // when Google on-device speech packs are not pre-installed on the user's phone.
         return try {
             SpeechRecognizer.createSpeechRecognizer(this)
         } catch (_: Throwable) {
@@ -988,7 +982,6 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
-            putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             if (language == "ar") {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-SA")
                 putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-SA", "ar-EG", "ar-AE", "ar"))
