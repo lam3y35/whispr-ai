@@ -2,7 +2,6 @@
 
 final RegExp _enFillers = RegExp(r'\b(um|uh|uhm|er|ah|erm)\b[,\s]*', caseSensitive: false);
 final RegExp _arFillers = RegExp(r'(^|\s)(يعني|أمم|اممم|آآآ|ااه|إيه|هاه|يعنى)(\s|$|(?=[،.؟!]))');
-final RegExp _repeatedWords = RegExp(r'\b([\p{L}\p{N}]+)\s+\1\b', caseSensitive: false, unicode: true);
 final RegExp _standaloneI = RegExp(r"(^|\s)i(\s|[.,!?;']|$)");
 final RegExp _iContractions = RegExp(r"\bi('(?:m|ve|ll|d))\b", caseSensitive: false);
 final RegExp _enSpacesPunct = RegExp(r'\s+([.,!?;:])');
@@ -44,27 +43,16 @@ bool isArabic(String text) {
   return arCount > enCount || (arCount > 0 && enCount == 0);
 }
 
-/// Corrects grammar, removes fillers, and formats punctuation.
-String correctBilingualGrammar(String? raw, [String language = 'auto']) {
-  if (raw == null || raw.trim().isEmpty) return '';
-
-  var text = raw.trim();
-  final isAr = language == 'ar' ? true : (language == 'en' ? false : isArabic(text));
-
-  // 1. Remove filler words
-  text = isAr
-      ? text.replaceAllMapped(_arFillers, (m) => '${m.group(1)}${m.group(3)}')
-      : text.replaceAll(_enFillers, ' ');
-
-  // 2. Remove repeated words
-  text = text.replaceAllMapped(_repeatedWords, (m) => m.group(1)!);
-
-  // 3. Clean spaces
-  text = text.replaceAll(_multipleSpaces, ' ').trim();
-  if (text.isEmpty) return '';
-
-  // 4. Language-specific formatting
-  return isAr ? _correctArabic(text) : _correctEnglish(text);
+String _dedupeRepeatedWords(String text) {
+  final words = text.split(RegExp(r'\s+'));
+  final result = <String>[];
+  for (final w in words) {
+    if (result.isNotEmpty && result.last.toLowerCase() == w.toLowerCase()) {
+      continue;
+    }
+    result.add(w);
+  }
+  return result.join(' ');
 }
 
 bool _isEnQuestion(String text) {
@@ -97,11 +85,34 @@ bool _isArQuestion(String text) {
   return false;
 }
 
+/// Corrects grammar, removes fillers, and formats punctuation.
+String correctBilingualGrammar(String? raw, [String language = 'auto']) {
+  if (raw == null || raw.trim().isEmpty) return '';
+
+  var text = raw.trim();
+  final isAr = language == 'ar' ? true : (language == 'en' ? false : isArabic(text));
+
+  // 1. Remove filler words
+  text = isAr
+      ? text.replaceAllMapped(_arFillers, (m) => '${m.group(1)}${m.group(3)}')
+      : text.replaceAll(_enFillers, ' ');
+
+  // 2. Remove repeated stutter words
+  text = _dedupeRepeatedWords(text);
+
+  // 3. Clean spaces
+  text = text.replaceAll(_multipleSpaces, ' ').trim();
+  if (text.isEmpty) return '';
+
+  // 4. Language-specific formatting
+  return isAr ? _correctArabic(text) : _correctEnglish(text);
+}
+
 String _correctEnglish(String text) {
   var t = text;
   t = t.replaceAllMapped(_standaloneI, (m) => '${m.group(1)}I${m.group(2)}');
   t = t.replaceAllMapped(_iContractions, (m) => 'I${m.group(1)}');
-  t = t.replaceAll(_enSpacesPunct, r'$1');
+  t = t.replaceAllMapped(_enSpacesPunct, (m) => m.group(1)!);
 
   if (t.isNotEmpty && t[0].toLowerCase() != t[0].toUpperCase()) {
     t = t[0].toUpperCase() + t.substring(1);
@@ -123,7 +134,7 @@ String _correctArabic(String text) {
       .replaceAll(';', '؛')
       .replaceAll('?', '؟');
 
-  t = t.replaceAll(_arSpacesPunct, r'$1');
+  t = t.replaceAllMapped(_arSpacesPunct, (m) => m.group(1)!);
   t = t.replaceAllMapped(_arPunctSpacing, (m) => '${m.group(1)} ');
 
   final lastChar = t[t.length - 1];
