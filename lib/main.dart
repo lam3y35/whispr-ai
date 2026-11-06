@@ -185,19 +185,37 @@ class _HomeScreenState extends State<HomeScreen> {
       if (map['text'] != null && mounted) {
         setState(() => _lastText = map['text'] as String);
       } else if (map['error'] != null && mounted) {
+        final err = map['error'] as String;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dictation: ${map['error']}')),
+          SnackBar(content: Text(_friendlyError(err))),
         );
       }
     } on PlatformException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Dictation failed: ${e.message ?? e.code}')),
+          SnackBar(content: Text(_friendlyError(e.message ?? e.code))),
         );
       }
     } finally {
       if (mounted) setState(() { _recording = false; _level = 0; });
     }
+  }
+
+  String _friendlyError(String err) {
+    if (err.contains('no_speech')) return 'No speech detected. Please speak clearly.';
+    if (err.contains('no_recognizer')) {
+      return 'Speech recognition service not found. Please enable Google or device voice typing.';
+    }
+    if (err.contains('permission')) {
+      return 'Microphone permission is required.';
+    }
+    if (err.contains('network')) {
+      return 'Network connection or offline speech pack required.';
+    }
+    if (err.contains('busy')) {
+      return 'Speech service busy. Please try again.';
+    }
+    return 'Dictation: $err';
   }
 
   @override

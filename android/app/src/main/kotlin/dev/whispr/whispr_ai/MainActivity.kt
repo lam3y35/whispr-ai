@@ -124,6 +124,23 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         }
     }
 
+    private fun createSpeechRecognizerSafely(): SpeechRecognizer? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                    return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+                }
+            } catch (_: Throwable) {
+                // Fall back to standard system recognizer if on-device fails or throws
+            }
+        }
+        return try {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun startDictation(result: MethodChannel.Result) {
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED
@@ -142,10 +159,10 @@ class MainActivity : FlutterActivity(), RecognitionListener {
         rules = DictionaryStore.rules(this)
         inAppFinal = ""
         recognizer?.destroy()
-        recognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-        } else {
-            SpeechRecognizer.createSpeechRecognizer(this)
+        recognizer = createSpeechRecognizerSafely()
+        if (recognizer == null) {
+            result.success(mapOf("error" to "no_recognizer"))
+            return
         }
         recognizer?.setRecognitionListener(this)
         recognizerResult = result
@@ -166,7 +183,12 @@ class MainActivity : FlutterActivity(), RecognitionListener {
                 putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
             }
         }
-        recognizer?.startListening(intent)
+        try {
+            recognizer?.startListening(intent)
+        } catch (e: Exception) {
+            recognizerResult?.success(mapOf("error" to (e.localizedMessage ?: "start_failed")))
+            recognizerResult = null
+        }
     }
 
     private var recognizerResult: MethodChannel.Result? = null
@@ -198,7 +220,19 @@ class MainActivity : FlutterActivity(), RecognitionListener {
     }
 
     override fun onError(error: Int) {
-        recognizerResult?.success(mapOf("error" to "error_$error"))
+        val message = when (error) {
+            SpeechRecognizer.ERROR_AUDIO -> "audio_recording_error"
+            SpeechRecognizer.ERROR_CLIENT -> "client_error"
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "permission_missing"
+            SpeechRecognizer.ERROR_NETWORK -> "network_error"
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "network_timeout"
+            SpeechRecognizer.ERROR_NO_MATCH -> "no_speech"
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "busy"
+            SpeechRecognizer.ERROR_SERVER -> "server_error"
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "no_speech"
+            else -> "error_$error"
+        }
+        recognizerResult?.success(mapOf("error" to message))
         recognizerResult = null
     }
 

@@ -264,6 +264,23 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         startRecognition()
     }
 
+    private fun createSpeechRecognizerSafely(): SpeechRecognizer? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            try {
+                if (SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+                    return SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
+                }
+            } catch (_: Throwable) {
+                // Fall back to standard recognizer
+            }
+        }
+        return try {
+            SpeechRecognizer.createSpeechRecognizer(this)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     private fun startRecognition() {
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             statusText.text = "no speech service on this device"
@@ -274,10 +291,11 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         previewText.text = ""
 
         recognizer?.destroy()
-        recognizer = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            SpeechRecognizer.createOnDeviceSpeechRecognizer(this)
-        } else {
-            SpeechRecognizer.createSpeechRecognizer(this)
+        recognizer = createSpeechRecognizerSafely()
+        if (recognizer == null) {
+            statusText.text = "no speech service on this device"
+            setIdleUi()
+            return
         }
         recognizer?.setRecognitionListener(this)
 
@@ -300,7 +318,12 @@ class ImeDictationService : InputMethodService(), RecognitionListener {
         micButton.setBackgroundColor(recLit)
         statusText.text = "speak now"
         insertButton.isEnabled = false
-        recognizer?.startListening(intent)
+        try {
+            recognizer?.startListening(intent)
+        } catch (e: Exception) {
+            statusText.text = e.localizedMessage ?: "failed to start"
+            setIdleUi()
+        }
     }
 
     private fun insertIntoField() {
