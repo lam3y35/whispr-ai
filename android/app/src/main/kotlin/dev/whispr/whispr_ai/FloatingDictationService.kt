@@ -323,10 +323,11 @@ class FloatingDictationService : Service(), RecognitionListener {
                 // Egyptian Arabic prioritized for natural dialect recognition
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-EG")
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar-EG")
-                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-EG", "ar-SA", "ar-AE", "ar"))
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-EG", "en-US", "ar-SA", "ar-AE", "ar"))
             } else if (language == "en") {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "ar-EG", "en-GB", "ar"))
             }
         }
 

@@ -52,5 +52,10 @@ void main() {
       final res = correctBilingualGrammar('انا. عاوز. اكتب. رساله');
       expect(res, 'انا عاوز اكتب رساله.');
     });
+
+    test('English spoken while language preference is set to Arabic formats as English', () {
+      final res = correctBilingualGrammar('how can i use this model', 'ar');
+      expect(res, 'How can I use this model?');
+    });
   });
 }

@@ -48,7 +48,15 @@ object BilingualGrammarCorrector {
         if (raw.isNullOrBlank()) return ""
 
         var text = raw.trim()
-        val isAr = if (langPreference == "ar") true else if (langPreference == "en") false else isArabic(text)
+        val detectedArabic = isArabic(text)
+        val hasLatin = text.any { it in 'a'..'z' || it in 'A'..'Z' }
+        val isAr = if (detectedArabic) {
+            true
+        } else if (hasLatin) {
+            false
+        } else {
+            langPreference == "ar"
+        }
 
         // 1. Remove filler words
         text = if (isAr) arFillers.replace(text, "$1$3") else enFillers.replace(text, " ")

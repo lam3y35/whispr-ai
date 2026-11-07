@@ -91,7 +91,9 @@ String correctBilingualGrammar(String? raw, [String language = 'auto']) {
   if (raw == null || raw.trim().isEmpty) return '';
 
   var text = raw.trim();
-  final isAr = language == 'ar' ? true : (language == 'en' ? false : isArabic(text));
+  final detectedArabic = isArabic(text);
+  final hasLatin = text.contains(RegExp(r'[a-zA-Z]'));
+  final isAr = detectedArabic ? true : (hasLatin ? false : language == 'ar');
 
   // 1. Remove filler words
   text = isAr

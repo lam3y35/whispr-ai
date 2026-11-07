@@ -279,10 +279,11 @@ class MainActivity : FlutterActivity(), RecognitionListener {
             if (lang == "ar") {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ar-EG")
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "ar-EG")
-                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-EG", "ar-SA", "ar-AE", "ar"))
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("ar-EG", "en-US", "ar-SA", "ar-AE", "ar"))
             } else if (lang == "en") {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, "en-US")
-                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "en-GB"))
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-US")
+                putExtra("android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES", arrayOf("en-US", "ar-EG", "en-GB", "ar"))
             }
         }
         try {
