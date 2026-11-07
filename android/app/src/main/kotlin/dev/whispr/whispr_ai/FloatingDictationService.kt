@@ -168,17 +168,18 @@ class FloatingDictationService : Service(), RecognitionListener {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             layoutType,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
-            x = resources.displayMetrics.widthPixels - dp(75)
+            gravity = Gravity.TOP or Gravity.RIGHT
+            x = dp(12)
             y = resources.displayMetrics.heightPixels / 3
         }
 
         overlayView = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            layoutDirection = View.LAYOUT_DIRECTION_LTR
             setPadding(dp(4), dp(4), dp(4), dp(4))
             visibility = if (isSmartMode) View.GONE else View.VISIBLE
         }
@@ -196,6 +197,12 @@ class FloatingDictationService : Service(), RecognitionListener {
             }
             setPadding(dp(12), dp(8), dp(12), dp(8))
             visibility = View.GONE
+            isClickable = true
+            setOnClickListener {
+                if (isRecording) {
+                    stopRecording()
+                }
+            }
             layoutParams = LinearLayout.LayoutParams(
                 dp(210),
                 LinearLayout.LayoutParams.WRAP_CONTENT
@@ -249,8 +256,8 @@ class FloatingDictationService : Service(), RecognitionListener {
                     if (Math.abs(dx) > dp(5) || Math.abs(dy) > dp(5)) {
                         isClick = false
                     }
-                    params.x = initialX + dx
-                    params.y = initialY + dy
+                    params.x = (initialX - dx).coerceAtLeast(0)
+                    params.y = (initialY + dy).coerceAtLeast(0)
                     try {
                         windowManager.updateViewLayout(overlayView, params)
                     } catch (_: Exception) {}
