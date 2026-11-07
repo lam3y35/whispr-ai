@@ -28,8 +28,32 @@ class WhisprAccessibilityService : AccessibilityService() {
         val isRunning: Boolean
             get() = instance != null
 
+        private val KNOWN_PLACEHOLDERS = setOf(
+            "message", "type a message", "type a message…", "type a message...",
+            "send a message", "text message", "enter message", "write a message",
+            "رسالة", "اكتب رسالة", "اكتب رسالة…", "اكتب رسالة...", "إرسال رسالة",
+            "search", "search…", "search...", "بحث", "بحث…", "بحث...",
+            "add a comment", "add a comment…", "إضافة تعليق", "chat"
+        )
+
+        private fun isHintOrPlaceholder(target: AccessibilityNodeInfo, current: String): Boolean {
+            if (current.isBlank()) return true
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (target.isShowingHintText) return true
+                val hint = target.hintText?.toString()?.trim()
+                if (!hint.isNullOrEmpty() && current.trim().equals(hint, ignoreCase = true)) {
+                    return true
+                }
+            }
+
+            val normalized = current.trim().lowercase()
+            return KNOWN_PLACEHOLDERS.contains(normalized)
+        }
+
         /**
          * Inserts text directly into the currently focused or last focused editable node.
+         * Strips existing placeholder/hint text (e.g. "Message" in WhatsApp) before inserting.
          * Falls back to paste action if ACTION_SET_TEXT is rejected.
          */
         fun insertText(text: String): Boolean {
@@ -39,7 +63,9 @@ class WhisprAccessibilityService : AccessibilityService() {
                 ?: return false
 
             return try {
-                val current = target.text?.toString().orEmpty()
+                val rawCurrent = target.text?.toString().orEmpty()
+                val current = if (isHintOrPlaceholder(target, rawCurrent)) "" else rawCurrent
+
                 val fullText = if (current.isBlank()) {
                     text
                 } else if (current.endsWith(" ") || current.endsWith("\n")) {
@@ -52,10 +78,15 @@ class WhisprAccessibilityService : AccessibilityService() {
                     putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, fullText)
                 }
                 val setSuccess = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
-                if (!setSuccess) {
-                    target.performAction(AccessibilityNodeInfo.ACTION_PASTE)
-                } else {
+                if (setSuccess) {
+                    val selectionArgs = Bundle().apply {
+                        putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_START_INT, fullText.length)
+                        putInt(AccessibilityNodeInfo.ACTION_ARGUMENT_SELECTION_END_INT, fullText.length)
+                    }
+                    target.performAction(AccessibilityNodeInfo.ACTION_SET_SELECTION, selectionArgs)
                     true
+                } else {
+                    target.performAction(AccessibilityNodeInfo.ACTION_PASTE)
                 }
             } catch (_: Exception) {
                 false

@@ -364,12 +364,12 @@ class FloatingDictationService : Service(), RecognitionListener {
         val (dictCorrected, applied) = DictionaryCorrector.apply(raw, rules)
         val cleaned = BilingualGrammarCorrector.correct(dictCorrected, language)
 
-        // 1. Try direct typing into active input field first
-        val typedDirectly = WhisprAccessibilityService.insertText(cleaned)
-
-        // 2. Always copy cleaned text to clipboard as guaranteed fallback
+        // 1. Copy cleaned text to clipboard first as guaranteed fallback for paste
         val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("Whispr AI Dictation", cleaned))
+
+        // 2. Try direct typing into active input field
+        val typedDirectly = WhisprAccessibilityService.insertText(cleaned)
 
         DictionaryStore.appendTranscript(this, cleaned, applied)
 
