@@ -44,9 +44,59 @@ object DictionaryStore {
     fun dictionaryFile(context: Context) = File(context.filesDir, "whispr_dictionary.txt")
     fun historyFile(context: Context) = File(context.filesDir, "whispr_transcripts.jsonl")
 
+    private val DEFAULT_CORRECTIONS = listOf(
+        "ميتنج" to "meeting",
+        "الميتنج" to "الـ meeting",
+        "لينك" to "link",
+        "اللينك" to "الـ link",
+        "بروجكت" to "project",
+        "البروجكت" to "الـ project",
+        "بريزنتيشن" to "presentation",
+        "البريزنتيشن" to "الـ presentation",
+        "تاسك" to "task",
+        "التاسك" to "الـ task",
+        "كول" to "call",
+        "الكول" to "الـ call",
+        "شير" to "share",
+        "ايميل" to "email",
+        "الايميل" to "الـ email",
+        "إيميل" to "email",
+        "الإيميل" to "الـ email",
+        "بي دي اف" to "PDF",
+        "بي دي إف" to "PDF",
+        "البي دي اف" to "الـ PDF",
+        "البي دي إف" to "الـ PDF",
+        "كود" to "code",
+        "الكود" to "الـ code",
+        "سوفت وير" to "software",
+        "داتا" to "data",
+        "ابلكيشن" to "application",
+        "أبلكيشن" to "application",
+        "واتساب" to "WhatsApp",
+        "اونلاين" to "online",
+        "أونلاين" to "online",
+        "اوفلاين" to "offline",
+        "أوفلاين" to "offline",
+        "ابديت" to "update",
+        "الابديت" to "الـ update",
+        "أبديت" to "update",
+        "الأبديت" to "الـ update",
+        "سيرفر" to "server",
+        "السيرفر" to "الـ server",
+        "كالندر" to "calendar",
+        "تشيك" to "check",
+        "زوم" to "Zoom"
+    )
+
     fun loadEntries(context: Context): List<DictionaryEntry> {
         val f = dictionaryFile(context)
-        if (!f.exists()) return emptyList()
+        if (!f.exists()) {
+            val defaults = DEFAULT_CORRECTIONS.map { (hear, write) ->
+                DictionaryEntry(kind = EntryKind.CORRECTION, hear = hear, write = write)
+            }
+            try { saveEntries(context, defaults) } catch (_: Exception) {}
+            return defaults
+        }
         val entries = mutableListOf<DictionaryEntry>()
         f.readLines().forEach { raw ->
             val line = raw.trim()
