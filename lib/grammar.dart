@@ -2,7 +2,7 @@
 
 final RegExp _enFillers = RegExp(r'\b(um|uh|uhm|er|ah|erm)\b[,\s]*', caseSensitive: false);
 final RegExp _arFillers = RegExp(r'(^|\s)(يعني|أمم|اممم|آآآ|ااه|إيه|هاه|يعنى)(\s|$|(?=[،.؟!]))');
-final RegExp _standaloneI = RegExp(r"(^|\s)i(\s|[.,!?;']|$)");
+final RegExp _standaloneI = RegExp(r"(^|\s)i(?=\s|[.,!?;']|$)");
 final RegExp _iContractions = RegExp(r"\bi('(?:m|ve|ll|d))\b", caseSensitive: false);
 final RegExp _enSpacesPunct = RegExp(r'\s+([.,!?;:])');
 final RegExp _enSentenceStart = RegExp(r'([.!?]\s+)([a-z])');
@@ -113,7 +113,7 @@ String correctBilingualGrammar(String? raw, [String language = 'auto']) {
 
 String _correctEnglish(String text) {
   var t = text;
-  t = t.replaceAllMapped(_standaloneI, (m) => '${m.group(1)}I${m.group(2)}');
+  t = t.replaceAllMapped(_standaloneI, (m) => '${m.group(1)}I');
   t = t.replaceAllMapped(_iContractions, (m) => 'I${m.group(1)}');
   t = t.replaceAllMapped(_enSpacesPunct, (m) => m.group(1)!);
 
