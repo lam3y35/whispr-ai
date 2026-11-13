@@ -11,12 +11,6 @@ final RegExp _arSpacesPunct = RegExp(r'\s+([،؛؟.!])');
 final RegExp _arPunctSpacing = RegExp(r'([،؛؟.!])(?=[\p{L}\p{N}])', unicode: true);
 final RegExp _multipleSpaces = RegExp(r'\s+');
 
-const Set<String> _enQuestionStarters = {
-  'who', 'what', 'where', 'when', 'why', 'how',
-  'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would',
-  'do', 'does', 'did', 'will', 'have', 'has', 'am'
-};
-
 const Set<String> _enAuxiliaries = {
   'do', 'does', 'did', 'is', 'are', 'was', 'were', 'can', 'could', 'should', 'would',
   'will', 'have', 'has', 'am'
