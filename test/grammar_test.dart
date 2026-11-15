@@ -23,6 +23,22 @@ void main() {
       expect(res, 'How can I use this model?');
     });
 
+    test('English imperatives and statements are not marked as questions', () {
+      expect(correctBilingualGrammar('have a nice day'), 'Have a nice day.');
+      expect(correctBilingualGrammar('I said do it now, do it'), 'I said do it now, do it.');
+      expect(correctBilingualGrammar('what you did is great'), 'What you did is great.');
+    });
+
+    test('English questions after a discourse lead-in are detected', () {
+      expect(correctBilingualGrammar('ok. so where are you'), 'Ok. So where are you?');
+      expect(correctBilingualGrammar('do you know the way'), 'Do you know the way?');
+      expect(correctBilingualGrammar('what time is it'), 'What time is it?');
+    });
+
+    test('legitimate "had had" is preserved', () {
+      expect(correctBilingualGrammar('I had had enough'), 'I had had enough.');
+    });
+
     test('Arabic filler words are removed', () {
       final res = correctBilingualGrammar('أنا يعني ذهبت إلى العمل');
       expect(res, 'أنا ذهبت إلى العمل.');

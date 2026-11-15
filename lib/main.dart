@@ -142,6 +142,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    bridge.setMethodCallHandler(null);
+    super.dispose();
+  }
+
   Future<void> _checkFloatingButtonStatus() async {
     if (!_isAndroid) return;
     try {
@@ -160,7 +166,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _toggleSmartMode(bool val) async {
     if (!_isAndroid) return;
-    await bridge.invokeMethod('setSmartMode', {'enabled': val});
+    try {
+      await bridge.invokeMethod('setSmartMode', {'enabled': val});
+    } on PlatformException catch (_) {
+      return;
+    }
     if (mounted) setState(() => _smartMode = val);
     if (val && !_accessibilityEnabled) {
       _openAccessibilitySettings();
@@ -225,14 +235,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadLast() async {
     if (!_isAndroid) return;
-    final hist = await bridge.invokeMethod('getHistory') as List<dynamic>;
-    if (hist.isEmpty) return;
-    final e = HistoryEntryView.tryParse(hist.first as String);
-    if (e != null && mounted) setState(() => _lastText = e.text);
+    try {
+      final hist = await bridge.invokeMethod('getHistory') as List<dynamic>?;
+      if (hist == null || hist.isEmpty) return;
+      final first = hist.first;
+      final e = first is String ? HistoryEntryView.tryParse(first) : null;
+      if (e != null && mounted) setState(() => _lastText = e.text);
+    } on PlatformException catch (_) {
+      // History is optional on the home screen; ignore bridge failures.
+    }
   }
 
   Future<void> _setLanguage(String lang) async {
-    setState(() => _language = lang);
+    if (mounted) setState(() => _language = lang);
     if (_isAndroid) {
       await bridge.invokeMethod('setLanguage', {'language': lang});
     }
